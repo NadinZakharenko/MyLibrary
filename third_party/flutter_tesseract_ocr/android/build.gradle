@@ -1,0 +1,47 @@
+group 'io.paratoner.flutter_tesseract_ocr'
+version '1.0'
+
+buildscript {
+    repositories {
+        google()
+        mavenCentral()
+    }
+
+    dependencies {
+        classpath 'com.android.tools.build:gradle:9.1.0'
+    }
+}
+
+rootProject.allprojects {
+    repositories {
+        google()
+        mavenCentral()
+        flatDir {
+            dirs project(':flutter_tesseract_ocr').file('libs')
+        }
+    }
+}
+
+apply plugin: 'com.android.library'
+
+android {
+    namespace "io.paratoner.flutter_tesseract_ocr"
+    compileSdk 36
+
+    compileOptions {
+        sourceCompatibility JavaVersion.VERSION_17
+        targetCompatibility JavaVersion.VERSION_17
+    }
+
+    defaultConfig {
+        minSdk 24
+    }
+
+    lint {
+        disable 'InvalidPackage'
+    }
+}
+
+dependencies {
+    implementation(name: 'tesseract4android-release', ext: 'aar')
+}
