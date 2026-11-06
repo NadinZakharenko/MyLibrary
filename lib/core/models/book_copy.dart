@@ -103,6 +103,10 @@ String yandexAudiobookUrl(String id) {
   return 'https://books.yandex.ru/audiobooks/${id.trim()}';
 }
 
+String yandexBookUrl(String id) {
+  return 'https://books.yandex.ru/books/${id.trim()}';
+}
+
 String? yandexAudiobookIdFromUrl(String? url) {
   if (url == null) {
     return null;

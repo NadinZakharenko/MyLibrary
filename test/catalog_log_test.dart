@@ -1,3 +1,5 @@
+import 'dart:convert';
+
 import 'package:flutter_test/flutter_test.dart';
 import 'package:http/http.dart' as http;
 import 'package:http/testing.dart';
@@ -137,6 +139,80 @@ void main() {
       ]);
     },
   );
+
+  test('asks Yandex Books after empty catalogs and hides the token', () async {
+    const secret = 'y0_secret_token';
+    final hosts = <String>[];
+    final records = <CatalogRequestRecord>[];
+    final client = MockClient((request) async {
+      hosts.add(request.url.host);
+      if (request.url.host == 'lbc.rsl.ru') {
+        return http.Response(
+          '<set><hits>0</hits><records></records></set>',
+          200,
+        );
+      }
+      if (request.url.host == 'www.livelib.ru') {
+        return http.Response(
+          '<html></html>',
+          200,
+          headers: const {'content-type': 'text/html; charset=utf-8'},
+        );
+      }
+      return http.Response.bytes(
+        utf8.encode(
+          jsonEncode({
+            'data': {
+              'search': {
+                'page': [
+                  {
+                    '__typename': 'AudioBook',
+                    'narrators': [
+                      {'name': 'Чтец'},
+                    ],
+                    'book': {
+                      'uuid': 'aud',
+                      'name': 'Мастер и Маргарита',
+                      'authors': [
+                        {'name': 'Михаил Булгаков'},
+                      ],
+                    },
+                  },
+                ],
+              },
+            },
+          }),
+        ),
+        200,
+        headers: const {'content-type': 'application/json; charset=utf-8'},
+      );
+    });
+    final service = MetadataService(
+      client: client,
+      yandexToken: () async => secret,
+      log: (record) async => records.add(record),
+    );
+    addTearDown(service.close);
+
+    final results = await service.search(title: 'Мастер и Маргарита');
+
+    expect(hosts, [
+      'lbc.rsl.ru',
+      'www.livelib.ru',
+      'api-gateway.bookmate.yandex.net',
+    ]);
+    expect(results.single.source, MetadataSource.yandexBooks);
+    expect(results.single.title, 'Мастер и Маргарита');
+    expect(results.single.authors, ['Михаил Булгаков']);
+    expect(results.single.narrator, 'Чтец');
+    expect(results.single.sourceUrl, 'https://books.yandex.ru/audiobooks/aud');
+    expect(results.single.workKey, 'aud');
+    expect(records.last.catalog, 'Яндекс Книги');
+    final dumped = records
+        .map((record) => '${record.detail} ${record.error}')
+        .join('\n');
+    expect(dumped.contains(secret), isFalse);
+  });
 
   test('stops at the first RSL record', () async {
     final hosts = <String>[];

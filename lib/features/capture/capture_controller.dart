@@ -6,8 +6,10 @@ import 'package:my_library/core/isbn.dart';
 import 'package:my_library/core/metadata/metadata_mapper.dart';
 import 'package:my_library/core/metadata/spine_slices.dart';
 import 'package:my_library/data/shelf_model_client.dart';
+import 'package:my_library/core/models/book_copy.dart';
 import 'package:my_library/core/models/book_draft.dart';
 import 'package:my_library/core/models/metadata_candidate.dart';
+import 'package:my_library/data/candidate_fill.dart';
 import 'package:my_library/core/platform_support.dart';
 import 'package:my_library/providers/app_providers.dart';
 import 'package:my_library/ui/user_message.dart';
@@ -492,6 +494,11 @@ class CaptureController extends Notifier<CaptureState> {
       seriesVolume: enriched.seriesVolume ?? seed.seriesVolume,
       coverPath: coverPath,
       candidates: const [],
+      format: catalogAudio(enriched) ? BookFormat.audio : seed.format,
+      yandexId: catalogYandexId(seed, enriched),
+      narrator: enriched.narrator.trim().isEmpty
+          ? seed.narrator
+          : enriched.narrator.trim(),
     );
   }
 

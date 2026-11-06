@@ -1,4 +1,4 @@
-enum MetadataSource { rsl, liveLib, model }
+enum MetadataSource { rsl, liveLib, yandexBooks, model }
 
 class MetadataCandidate {
   const MetadataCandidate({
@@ -16,6 +16,7 @@ class MetadataCandidate {
     this.coverUrl,
     this.sourceUrl,
     this.workKey,
+    this.narrator = '',
   });
 
   final MetadataSource source;
@@ -32,10 +33,12 @@ class MetadataCandidate {
   final String? coverUrl;
   final String? sourceUrl;
   final String? workKey;
+  final String narrator;
 
   String get sourceLabel => switch (source) {
     MetadataSource.rsl => 'РГБ',
     MetadataSource.liveLib => 'LiveLib',
+    MetadataSource.yandexBooks => 'Яндекс Книги',
     MetadataSource.model => 'Модель',
   };
 
@@ -60,6 +63,7 @@ class MetadataCandidate {
       coverUrl: coverUrl ?? this.coverUrl,
       sourceUrl: sourceUrl,
       workKey: workKey,
+      narrator: narrator,
     );
   }
 }

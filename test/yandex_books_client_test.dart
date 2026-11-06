@@ -102,4 +102,85 @@ void main() {
     expect(requested.any((url) => url.contains('page=2&per_page=1')), isTrue);
     expect(requested.any((url) => url.contains('limit=')), isFalse);
   });
+
+  test('search reads a text book and an audiobook and skips a person', () async {
+    late Uri uri;
+    late Map<String, String> headers;
+    late String body;
+    final client = MockClient((request) async {
+      uri = request.url;
+      headers = request.headers;
+      body = utf8.decode(request.bodyBytes);
+      return _json({
+        'data': {
+          'search': {
+            'page': [
+              {'__typename': 'Person', 'name': 'Кто-то'},
+              {
+                '__typename': 'TextBook',
+                'book': {
+                  'uuid': 'txt',
+                  'name': 'Война и мир',
+                  'authors': [
+                    {'name': 'Лев Толстой'},
+                  ],
+                  'publisher': {'name': 'АСТ'},
+                  'cover': {'url': 'https://example.test/war.jpg'},
+                },
+              },
+              {
+                '__typename': 'AudioBook',
+                'narrators': [
+                  {'name': 'Чтец'},
+                ],
+                'book': {
+                  'uuid': 'aud',
+                  'name': 'Мастер и Маргарита',
+                  'annotation': '<p>Роман</p>',
+                  'authors': [
+                    {'name': 'Михаил Булгаков'},
+                  ],
+                },
+              },
+            ],
+          },
+        },
+      });
+    });
+
+    final hits = await YandexBooksClient(httpClient: client).searchBooks(
+      token: 'y0_secret',
+      query: 'Мастер и Маргарита',
+    );
+
+    expect(uri.host, 'api-gateway.bookmate.yandex.net');
+    expect(uri.path, '/graphql');
+    expect(headers['auth-token'], 'y0_secret');
+    expect(body, contains('Мастер и Маргарита'));
+    expect(body, contains('"types":[]'));
+    expect(hits.map((hit) => hit.id), ['txt', 'aud']);
+    expect(hits.first.audio, isFalse);
+    expect(hits.first.authors, ['Лев Толстой']);
+    expect(hits.first.publisher, 'АСТ');
+    expect(hits.first.coverUrl, 'https://example.test/war.jpg');
+    expect(hits.last.audio, isTrue);
+    expect(hits.last.annotation, 'Роман');
+    expect(hits.last.narrator, 'Чтец');
+  });
+
+  test('search does nothing when the token is empty', () async {
+    var calls = 0;
+    final client = MockClient((request) async {
+      calls += 1;
+      return http.Response('{}', 200);
+    });
+
+    final hits = await YandexBooksClient(httpClient: client).searchBooks(
+      token: '  ',
+      query: 'Война и мир',
+    );
+
+    expect(hits, isEmpty);
+    expect(calls, 0);
+  });
 }

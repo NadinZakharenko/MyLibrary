@@ -84,6 +84,7 @@ final appLogProvider = Provider<AppLog>((ref) {
 
 final metadataServiceProvider = Provider<MetadataService>((ref) {
   final service = MetadataService(
+    yandexToken: () => ref.read(libraryRepositoryProvider).yandexBooksToken(),
     model: ({String? isbn, String? title, String? author}) {
       return askConnectedModel(
         repository: ref.read(libraryRepositoryProvider),

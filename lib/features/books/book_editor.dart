@@ -5,6 +5,7 @@ import 'package:mobile_scanner/mobile_scanner.dart';
 import 'package:my_library/core/format/russian_plural.dart';
 import 'package:my_library/core/isbn.dart';
 import 'package:my_library/core/models/book_copy.dart';
+import 'package:my_library/data/candidate_fill.dart';
 import 'package:my_library/core/metadata/rsl.dart';
 import 'package:my_library/core/metadata/spine_slices.dart';
 import 'package:my_library/core/models/book_draft.dart';
@@ -305,6 +306,9 @@ class _BookEditorState extends ConsumerState<BookEditor> {
       if (enriched.seriesVolume != null) {
         _volume.text = '${enriched.seriesVolume}';
       }
+      if (enriched.narrator.trim().isNotEmpty) {
+        _narrator.text = enriched.narrator.trim();
+      }
       setState(() {
         _draft = _draft.copyWith(
           authors: enriched.authors,
@@ -317,6 +321,9 @@ class _BookEditorState extends ConsumerState<BookEditor> {
               : enriched.seriesName,
           seriesVolume: enriched.seriesVolume ?? _draft.seriesVolume,
           coverPath: coverPath,
+          format: catalogAudio(enriched) ? BookFormat.audio : _draft.format,
+          yandexId: catalogYandexId(_draft, enriched),
+          narrator: _narrator.text,
         );
       });
       await ref.read(appLogProvider).write(

@@ -7,7 +7,9 @@ import 'package:my_library/core/logging/catalog_request.dart';
 import 'package:my_library/core/logging/redact.dart';
 import 'package:my_library/core/metadata/livelib.dart';
 import 'package:my_library/core/metadata/rsl.dart';
+import 'package:my_library/core/models/book_copy.dart';
 import 'package:my_library/core/models/metadata_candidate.dart';
+import 'package:my_library/data/yandex_books_client.dart';
 
 class MetadataLookupException implements Exception {
   MetadataLookupException(this.message);
@@ -25,12 +27,17 @@ typedef ModelTextLookup = Future<List<MetadataCandidate>> Function({
 });
 
 class MetadataService {
-  MetadataService({http.Client? client, this.log, this.model})
-    : _client = client ?? http.Client();
+  MetadataService({
+    http.Client? client,
+    this.log,
+    this.model,
+    this.yandexToken,
+  }) : _client = client ?? http.Client();
 
   final http.Client _client;
   final CatalogRequestLog? log;
   final ModelTextLookup? model;
+  final Future<String?> Function()? yandexToken;
 
   static const userAgent = 'MyLibrary/1.0 (personal home library)';
 
@@ -50,7 +57,10 @@ class MetadataService {
     if (!hasIsbn && !hasText) {
       return const [];
     }
-    const secrets = <String>[];
+    final yandexSecret = (await yandexToken?.call())?.trim() ?? '';
+    final secrets = <String>[
+      if (yandexSecret.length >= 6) yandexSecret,
+    ];
 
     final results = <MetadataCandidate>[];
     var reachedCatalog = false;
@@ -83,6 +93,14 @@ class MetadataService {
             detail: normalizedIsbn,
             secrets: secrets,
           ),
+          if (yandexSecret.isNotEmpty)
+            () => _yandex(
+              query: normalizedIsbn,
+              token: yandexSecret,
+              kind: 'ISBN',
+              detail: normalizedIsbn,
+              secrets: secrets,
+            ),
         ]),
       );
     }
@@ -100,6 +118,14 @@ class MetadataService {
             detail: _detail(title: titleText, author: authorText),
             secrets: secrets,
           ),
+          if (yandexSecret.isNotEmpty)
+            () => _yandex(
+              query: liveQuery,
+              token: yandexSecret,
+              kind: _kind(title: titleText, author: authorText),
+              detail: _detail(title: titleText, author: authorText),
+              secrets: secrets,
+            ),
         ]),
       );
     }
@@ -164,6 +190,58 @@ class MetadataService {
   }
 
   void close() => _client.close();
+
+  Future<List<MetadataCandidate>> _yandex({
+    required String query,
+    required String token,
+    required String kind,
+    required String detail,
+    required List<String> secrets,
+  }) async {
+    try {
+      final hits = await YandexBooksClient(httpClient: _client).searchBooks(
+        token: token,
+        query: query,
+      );
+      await _record(
+        catalog: 'Яндекс Книги',
+        kind: kind,
+        detail: detail,
+        secrets: secrets,
+        statusCode: 200,
+        resultCount: hits.length,
+      );
+      return [
+        for (final hit in hits)
+          MetadataCandidate(
+            source: MetadataSource.yandexBooks,
+            title: hit.title,
+            authors: hit.authors,
+            publisher: hit.publisher,
+            description: hit.annotation,
+            narrator: hit.narrator,
+            coverUrl: hit.coverUrl,
+            sourceUrl: hit.audio
+                ? yandexAudiobookUrl(hit.id)
+                : yandexBookUrl(hit.id),
+            workKey: hit.id,
+          ),
+      ];
+    } catch (error) {
+      await _record(
+        catalog: 'Яндекс Книги',
+        kind: kind,
+        detail: detail,
+        secrets: secrets,
+        error: error is StateError
+            ? error.message
+            : error is FormatException
+            ? 'непонятный ответ'
+            : 'нет связи',
+      );
+      return const [];
+    }
+  }
 
   Future<List<MetadataCandidate>> _rsl({
     String? isbn,

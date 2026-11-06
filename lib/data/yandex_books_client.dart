@@ -22,6 +22,28 @@ class YandexAudiobookRemote {
   final String? coverUrl;
 }
 
+class YandexCatalogHit {
+  const YandexCatalogHit({
+    required this.id,
+    required this.title,
+    required this.authors,
+    required this.audio,
+    this.publisher = '',
+    this.annotation = '',
+    this.narrator = '',
+    this.coverUrl,
+  });
+
+  final String id;
+  final String title;
+  final List<String> authors;
+  final bool audio;
+  final String publisher;
+  final String annotation;
+  final String narrator;
+  final String? coverUrl;
+}
+
 class YandexBooksClient {
   const YandexBooksClient({http.Client? httpClient, this.pageSize = 100})
       : _http = httpClient;
@@ -224,4 +246,188 @@ class YandexBooksClient {
     }
     return const {};
   }
+
+  Future<List<YandexCatalogHit>> searchBooks({
+    required String token,
+    required String query,
+  }) async {
+    final secret = token.trim();
+    final text = query.trim();
+    if (secret.isEmpty || text.isEmpty) {
+      return const [];
+    }
+    final uri = Uri.https('api-gateway.bookmate.yandex.net', '/graphql');
+    final headers = <String, String>{
+      'Accept': 'application/json',
+      'Content-Type': 'application/json; charset=utf-8',
+      'App-Language': 'ru',
+      'App-Locale': 'ru',
+      'App-Platform': 'android',
+      'Bookmate-Version': '20200305',
+      'Device-Os': 'Android',
+      'User-Agent': 'okhttp/4.12.0',
+      'Auth-Token': secret,
+    };
+    final payload = jsonEncode({
+      'operationName': 'Search',
+      'variables': {
+        'query': {
+          'cursor': '',
+          'noMisspell': false,
+          'query': text,
+          'types': <String>[],
+        },
+      },
+      'query': _yandexSearchQuery,
+    });
+    final client = _http;
+    final response = client == null
+        ? await http.post(uri, headers: headers, body: payload)
+        : await client.post(uri, headers: headers, body: payload);
+    if (response.statusCode < 200 || response.statusCode >= 300) {
+      final reason = response.statusCode == 401
+          ? ' Токен не принят. Нужен OAuth-токен Яндекс Книг.'
+          : '';
+      throw StateError('Яндекс Книги ответили ${response.statusCode}.$reason');
+    }
+    final decoded = jsonDecode(utf8.decode(response.bodyBytes));
+    return _catalogHits(decoded);
+  }
+
+  List<YandexCatalogHit> _catalogHits(Object? json) {
+    if (json is! Map) {
+      return const [];
+    }
+    final data = json['data'];
+    if (data is! Map) {
+      return const [];
+    }
+    final search = data['search'];
+    if (search is! Map) {
+      return const [];
+    }
+    final page = search['page'];
+    if (page is! List) {
+      return const [];
+    }
+    final hits = <YandexCatalogHit>[];
+    for (final item in page) {
+      if (hits.length == 8) {
+        break;
+      }
+      if (item is! Map) {
+        continue;
+      }
+      final kind = '${item['__typename'] ?? ''}';
+      final audio = kind == 'AudioBook';
+      if (kind != 'TextBook' && kind != 'TextSerial' && !audio) {
+        continue;
+      }
+      final book = item['book'];
+      if (book is! Map) {
+        continue;
+      }
+      final title = '${book['name'] ?? book['title'] ?? ''}'.trim();
+      final id = '${book['uuid'] ?? book['id'] ?? ''}'.trim();
+      if (title.isEmpty || id.isEmpty) {
+        continue;
+      }
+      final narrators = _names(item['narrators']);
+      hits.add(
+        YandexCatalogHit(
+          id: id,
+          title: title,
+          authors: _names(book['authors']),
+          audio: audio,
+          publisher: _publisherName(book['publisher']),
+          annotation: _plain('${book['annotation'] ?? book['editorAnnotation'] ?? ''}'),
+          narrator: narrators.join(', '),
+          coverUrl: _coverUrl(book['cover']),
+        ),
+      );
+    }
+    return hits;
+  }
+
+  String _publisherName(Object? value) {
+    if (value is Map) {
+      return '${value['name'] ?? ''}'.trim();
+    }
+    if (value is String) {
+      return value.trim();
+    }
+    return '';
+  }
+
+  String? _coverUrl(Object? value) {
+    if (value is String && value.startsWith('http')) {
+      return value;
+    }
+    if (value is Map) {
+      final candidate = value['url'] ?? value['large'] ?? value['small'];
+      if (candidate is String && candidate.startsWith('http')) {
+        return candidate;
+      }
+    }
+    return null;
+  }
+
+  String _plain(String value) {
+    return value
+        .replaceAll(RegExp(r'<[^>]*>'), ' ')
+        .replaceAll(RegExp(r'\s+'), ' ')
+        .trim();
+  }
 }
+
+const _yandexSearchQuery = r'''
+query Search($query: SearchParamsInput!) {
+    search(query: $query) {
+        page {
+            __typename
+            ...searchSnippetAudioBookFragment
+            ...searchSnippetTextBookFragment
+            ...searchSnippetComicBookFragment
+            ...searchSnippetTextSerialFragment
+            ...bookshelfFragment
+            ...personFragment
+            ...publisherFragment
+            ...seriesFragment
+            ...topicFragment
+            ...userFragment
+        }
+        cursor
+        rankedFilter { filterType }
+        misspell { correctedText correctionType }
+    }
+}
+fragment coverFragment on Cover { url ratio backgroundColorHex }
+fragment personFragment on Person { avatar { __typename ...coverFragment } name uuid worksCount roles }
+fragment bookFragment on Book { annotation name cover { __typename ...coverFragment } uuid authors { __typename ...personFragment } ageRestriction editorAnnotation }
+fragment publisherFragment on Publisher { avatar { __typename ...coverFragment } name uuid worksCount }
+fragment publisherBookFragment on Book { publisher { __typename ...publisherFragment } }
+fragment translatorsBookFragment on Book { translators { __typename ...personFragment } }
+fragment topicsBookFragment on Book { topics { name totalBook uuid } }
+fragment subscriptionLevelsFragment on Book { subscriptionLevels }
+fragment snippetBookFragment on Book { __typename ...bookFragment ...publisherBookFragment ...translatorsBookFragment ...topicsBookFragment ...subscriptionLevelsFragment }
+fragment bookTagFragment on Tag { name value }
+fragment narratorsAudioBookFragment on AudioBook { narrators { __typename ...personFragment } }
+fragment progressFragment on Progress { finished inLibrary progress isPublic }
+fragment progressAudioBookFragment on AudioBook { progress { __typename ...progressFragment } }
+fragment listenersCountAudioBookFragment on AudioBook { listenersCount }
+fragment searchSnippetAudioBookFragment on AudioBook { __typename book { __typename ...snippetBookFragment tags { __typename ...bookTagFragment } } ...narratorsAudioBookFragment ...progressAudioBookFragment ...listenersCountAudioBookFragment }
+fragment progressTextBookFragment on TextBook { progress { __typename ...progressFragment } }
+fragment readersCountTextBookFragment on TextBook { readersCount }
+fragment searchSnippetTextBookFragment on TextBook { __typename book { __typename ...snippetBookFragment tags { __typename ...bookTagFragment } } ...progressTextBookFragment ...readersCountTextBookFragment }
+fragment progressComicBookFragment on ComicBook { progress { __typename ...progressFragment } }
+fragment readersCountComicBookFragment on ComicBook { readersCount }
+fragment searchSnippetComicBookFragment on ComicBook { __typename book { __typename ...snippetBookFragment tags { __typename ...bookTagFragment } } ...progressComicBookFragment ...readersCountComicBookFragment }
+fragment textSerialFragment on TextSerial { book { __typename ...bookFragment } }
+fragment episodesTextSerialFragment on TextSerial { episodes { total } }
+fragment readersCountTextSerialFragment on TextSerial { readersCount }
+fragment searchSnippetTextSerialFragment on TextSerial { __typename book { __typename ...snippetBookFragment tags { __typename ...bookTagFragment } } ...textSerialFragment ...episodesTextSerialFragment ...readersCountTextSerialFragment }
+fragment userFragment on User { avatar { __typename ...coverFragment } name uuid followersCount login }
+fragment bookshelfFragment on Bookshelf { cover { __typename ...coverFragment } name uuid user { __typename ...userFragment } posts { total } followersCount description }
+fragment seriesFragment on Series { authors { __typename ...personFragment } cover { __typename ...coverFragment } name uuid items { followersCount total } }
+fragment topicFragment on Topic { name slug totalBook uuid parent { name slug totalBook uuid } }
+''';
