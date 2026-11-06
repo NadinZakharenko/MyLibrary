@@ -8,6 +8,7 @@ import 'package:my_library/core/logging/redact.dart';
 import 'package:my_library/core/metadata/livelib.dart';
 import 'package:my_library/core/metadata/model_book.dart';
 import 'package:my_library/core/metadata/rsl.dart';
+import 'package:my_library/core/models/book_copy.dart';
 import 'package:my_library/core/models/metadata_candidate.dart';
 import 'package:my_library/data/metadata_service.dart';
 
@@ -140,55 +141,11 @@ void main() {
     },
   );
 
-  test('asks Yandex Books after empty catalogs and hides the token', () async {
+  test('a print search keeps the Yandex text book and hides the token', () async {
     const secret = 'y0_secret_token';
-    final hosts = <String>[];
     final records = <CatalogRequestRecord>[];
-    final client = MockClient((request) async {
-      hosts.add(request.url.host);
-      if (request.url.host == 'lbc.rsl.ru') {
-        return http.Response(
-          '<set><hits>0</hits><records></records></set>',
-          200,
-        );
-      }
-      if (request.url.host == 'www.livelib.ru') {
-        return http.Response(
-          '<html></html>',
-          200,
-          headers: const {'content-type': 'text/html; charset=utf-8'},
-        );
-      }
-      return http.Response.bytes(
-        utf8.encode(
-          jsonEncode({
-            'data': {
-              'search': {
-                'page': [
-                  {
-                    '__typename': 'AudioBook',
-                    'narrators': [
-                      {'name': 'Чтец'},
-                    ],
-                    'book': {
-                      'uuid': 'aud',
-                      'name': 'Мастер и Маргарита',
-                      'authors': [
-                        {'name': 'Михаил Булгаков'},
-                      ],
-                    },
-                  },
-                ],
-              },
-            },
-          }),
-        ),
-        200,
-        headers: const {'content-type': 'application/json; charset=utf-8'},
-      );
-    });
     final service = MetadataService(
-      client: client,
+      client: _catalogThenYandex(),
       yandexToken: () async => secret,
       log: (record) async => records.add(record),
     );
@@ -196,22 +153,33 @@ void main() {
 
     final results = await service.search(title: 'Мастер и Маргарита');
 
-    expect(hosts, [
-      'lbc.rsl.ru',
-      'www.livelib.ru',
-      'api-gateway.bookmate.yandex.net',
-    ]);
     expect(results.single.source, MetadataSource.yandexBooks);
     expect(results.single.title, 'Мастер и Маргарита');
-    expect(results.single.authors, ['Михаил Булгаков']);
-    expect(results.single.narrator, 'Чтец');
-    expect(results.single.sourceUrl, 'https://books.yandex.ru/audiobooks/aud');
-    expect(results.single.workKey, 'aud');
-    expect(records.last.catalog, 'Яндекс Книги');
+    expect(results.single.workKey, 'txt');
+    expect(results.single.sourceUrl, 'https://books.yandex.ru/books/txt');
+    expect(results.single.narrator, isEmpty);
+    expect(records.last.resultCount, 1);
     final dumped = records
         .map((record) => '${record.detail} ${record.error}')
         .join('\n');
     expect(dumped.contains(secret), isFalse);
+  });
+
+  test('an audio search keeps the Yandex audiobook', () async {
+    final service = MetadataService(
+      client: _catalogThenYandex(),
+      yandexToken: () async => 'y0_secret_token',
+    );
+    addTearDown(service.close);
+
+    final results = await service.search(
+      title: 'Мастер и Маргарита',
+      format: BookFormat.audio,
+    );
+
+    expect(results.single.workKey, 'aud');
+    expect(results.single.narrator, 'Чтец');
+    expect(results.single.sourceUrl, 'https://books.yandex.ru/audiobooks/aud');
   });
 
   test('stops at the first RSL record', () async {
@@ -403,6 +371,62 @@ void main() {
       ]);
     },
   );
+}
+
+MockClient _catalogThenYandex() {
+  return MockClient((request) async {
+    if (request.url.host == 'lbc.rsl.ru') {
+      return http.Response(
+        '<set><hits>0</hits><records></records></set>',
+        200,
+      );
+    }
+    if (request.url.host == 'www.livelib.ru') {
+      return http.Response(
+        '<html></html>',
+        200,
+        headers: const {'content-type': 'text/html; charset=utf-8'},
+      );
+    }
+    return http.Response.bytes(
+      utf8.encode(
+        jsonEncode({
+          'data': {
+            'search': {
+              'page': [
+                {
+                  '__typename': 'AudioBook',
+                  'narrators': [
+                    {'name': 'Чтец'},
+                  ],
+                  'book': {
+                    'uuid': 'aud',
+                    'name': 'Мастер и Маргарита',
+                    'authors': [
+                      {'name': 'Михаил Булгаков'},
+                    ],
+                  },
+                },
+                {
+                  '__typename': 'TextBook',
+                  'book': {
+                    'uuid': 'txt',
+                    'name': 'Мастер и Маргарита',
+                    'authors': [
+                      {'name': 'Михаил Булгаков'},
+                    ],
+                    'publisher': {'name': 'Эксмо'},
+                  },
+                },
+              ],
+            },
+          },
+        }),
+      ),
+      200,
+      headers: const {'content-type': 'application/json; charset=utf-8'},
+    );
+  });
 }
 
 const _rslRecord = '''

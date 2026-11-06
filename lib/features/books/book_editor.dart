@@ -243,6 +243,7 @@ class _BookEditorState extends ConsumerState<BookEditor> {
         isbn: isbn,
         title: title.length >= 2 ? title : null,
         author: author.length >= 2 ? author : null,
+        format: _draft.format,
       );
       if (!mounted) {
         return;

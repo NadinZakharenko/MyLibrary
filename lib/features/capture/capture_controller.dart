@@ -259,6 +259,7 @@ class CaptureController extends Notifier<CaptureState> {
         title: title,
         author: author,
         isbn: isbn,
+        format: seed.format,
       );
       if (candidates.isEmpty) {
         state = state.copyWith(
@@ -420,6 +421,7 @@ class CaptureController extends Notifier<CaptureState> {
     String? title,
     String? author,
     String? isbn,
+    BookFormat format = BookFormat.print,
   }) async {
     try {
       return await ref.read(metadataServiceProvider).search(
@@ -427,6 +429,7 @@ class CaptureController extends Notifier<CaptureState> {
         title: title,
         author: author,
         isbn: isbn,
+        format: format,
       );
     } catch (error) {
       state = state.copyWith(error: userFacingError(error));

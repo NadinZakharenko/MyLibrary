@@ -46,6 +46,7 @@ class MetadataService {
     String? title,
     String? author,
     String? isbn,
+    BookFormat format = BookFormat.print,
   }) async {
     final normalizedIsbn = _cleanIsbn(isbn);
     final titleText = title?.trim().isNotEmpty == true
@@ -100,6 +101,7 @@ class MetadataService {
               kind: 'ISBN',
               detail: normalizedIsbn,
               secrets: secrets,
+              format: format,
             ),
         ]),
       );
@@ -125,6 +127,7 @@ class MetadataService {
               kind: _kind(title: titleText, author: authorText),
               detail: _detail(title: titleText, author: authorText),
               secrets: secrets,
+              format: format,
             ),
         ]),
       );
@@ -197,22 +200,31 @@ class MetadataService {
     required String kind,
     required String detail,
     required List<String> secrets,
+    required BookFormat format,
   }) async {
     try {
       final hits = await YandexBooksClient(httpClient: _client).searchBooks(
         token: token,
         query: query,
       );
+      final audio = switch (format) {
+        BookFormat.print => false,
+        BookFormat.audio => true,
+      };
+      final matched = [
+        for (final hit in hits)
+          if (hit.audio == audio) hit,
+      ];
       await _record(
         catalog: 'Яндекс Книги',
         kind: kind,
         detail: detail,
         secrets: secrets,
         statusCode: 200,
-        resultCount: hits.length,
+        resultCount: matched.length,
       );
       return [
-        for (final hit in hits)
+        for (final hit in matched)
           MetadataCandidate(
             source: MetadataSource.yandexBooks,
             title: hit.title,
