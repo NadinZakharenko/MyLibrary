@@ -44,6 +44,7 @@ class BookCardScreen extends ConsumerWidget {
         final theme = Theme.of(context);
         return Scaffold(
           appBar: AppBar(
+            leading: _bookCardLeading(context),
             title: const Text('Книга'),
             actions: [
               IconButton(
@@ -62,15 +63,14 @@ class BookCardScreen extends ConsumerWidget {
                   final confirmed = await confirmDialog(
                     context,
                     title: 'Удалить книгу',
-                    message:
-                        'Будет удалена только эта книга. Другие экземпляры того же издания не изменятся.',
+                    message: 'Будет удалена только эта книга. Другие экземпляры того же издания не изменятся.',
                   );
                   if (!confirmed || !context.mounted) {
                     return;
                   }
                   await ref.read(libraryRepositoryProvider).deleteBook(data.id);
                   if (context.mounted) {
-                    context.pop();
+                    _leaveBookCard(context);
                   }
                 },
                 icon: const Icon(Icons.delete_outline),
@@ -104,16 +104,25 @@ class BookCardScreen extends ConsumerWidget {
                               ? 'Автор не указан'
                               : data.authors.join(', '),
                         ),
-                        if (data.genres.isNotEmpty) Text(data.genres.join(', ')),
+                        if (data.genres.isNotEmpty)
+                          Text(data.genres.join(', ')),
                         const SizedBox(height: 8),
-                        Text(readingStatusLabelFor(data.readingStatus, data.format)),
+                        Text(
+                          readingStatusLabelFor(
+                            data.readingStatus,
+                            data.format,
+                          ),
+                        ),
                         if (data.statusChangedAt != null)
                           Text(
                             '${readingStatusDateLabelFor(data.readingStatus, data.format)}: ${formatDay(data.statusChangedAt!)}',
                             style: theme.textTheme.bodySmall,
                           ),
-                        if (seriesLabel(data.seriesName, data.seriesVolume) != null)
-                          Text(seriesLabel(data.seriesName, data.seriesVolume)!),
+                        if (seriesLabel(data.seriesName, data.seriesVolume) !=
+                            null)
+                          Text(
+                            seriesLabel(data.seriesName, data.seriesVolume)!,
+                          ),
                         const SizedBox(height: 8),
                         Text(
                           'Добавлена ${formatDay(data.createdAt)}',
@@ -136,7 +145,10 @@ class BookCardScreen extends ConsumerWidget {
                       cabinetId: data.cabinetId,
                       shelfId: data.shelfId,
                     ),
-                    child: Text(data.locationPath, style: theme.textTheme.titleMedium),
+                    child: Text(
+                      data.locationPath,
+                      style: theme.textTheme.titleMedium,
+                    ),
                   ),
                 ),
               if (loanIsActive(data.loanPerson)) ...[
@@ -151,9 +163,8 @@ class BookCardScreen extends ConsumerWidget {
                 ),
                 const SizedBox(height: 8),
                 OutlinedButton(
-                  onPressed: () => ref
-                      .read(libraryRepositoryProvider)
-                      .returnLoan(data.id),
+                  onPressed: () =>
+                      ref.read(libraryRepositoryProvider).returnLoan(data.id),
                   child: const Text('Книга возвращена'),
                 ),
               ],
@@ -208,8 +219,7 @@ class BookCardScreen extends ConsumerWidget {
                   spacing: 8,
                   runSpacing: 8,
                   children: [
-                    for (final tag in data.hashtags)
-                      Chip(label: Text('#$tag')),
+                    for (final tag in data.hashtags) Chip(label: Text('#$tag')),
                   ],
                 ),
               ],
@@ -239,7 +249,11 @@ class BookCardScreen extends ConsumerWidget {
     );
   }
 
-  Future<void> _move(BuildContext context, WidgetRef ref, BookDetails book) async {
+  Future<void> _move(
+    BuildContext context,
+    WidgetRef ref,
+    BookDetails book,
+  ) async {
     final moved = await showModalBottomSheet<({int? shelfId, int? rowId})>(
       context: context,
       isScrollControlled: true,
@@ -250,11 +264,9 @@ class BookCardScreen extends ConsumerWidget {
       return;
     }
     try {
-      await ref.read(libraryRepositoryProvider).moveBook(
-        id: book.id,
-        shelfId: moved.shelfId,
-        rowId: moved.rowId,
-      );
+      await ref
+          .read(libraryRepositoryProvider)
+          .moveBook(id: book.id, shelfId: moved.shelfId, rowId: moved.rowId);
     } catch (error) {
       if (context.mounted) {
         showMessage(context, userFacingError(error));
@@ -292,7 +304,10 @@ class _MoveSheetState extends ConsumerState<_MoveSheet> {
             mainAxisSize: MainAxisSize.min,
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
-              Text('Куда поставить', style: Theme.of(context).textTheme.titleLarge),
+              Text(
+                'Куда поставить',
+                style: Theme.of(context).textTheme.titleLarge,
+              ),
               const SizedBox(height: 12),
               LocationPicker(
                 options: items,
@@ -307,10 +322,8 @@ class _MoveSheetState extends ConsumerState<_MoveSheet> {
               ),
               const SizedBox(height: 16),
               FilledButton(
-                onPressed: () => Navigator.pop(
-                  context,
-                  (shelfId: _shelfId, rowId: _rowId),
-                ),
+                onPressed: () =>
+                    Navigator.pop(context, (shelfId: _shelfId, rowId: _rowId)),
                 child: const Text('Переместить'),
               ),
             ],
@@ -318,6 +331,25 @@ class _MoveSheetState extends ConsumerState<_MoveSheet> {
         ),
       ),
     );
+  }
+}
+
+Widget? _bookCardLeading(BuildContext context) {
+  if (context.canPop()) {
+    return null;
+  }
+  return IconButton(
+    tooltip: 'На главную',
+    onPressed: () => context.go('/home'),
+    icon: const Icon(Icons.arrow_back),
+  );
+}
+
+void _leaveBookCard(BuildContext context) {
+  if (context.canPop()) {
+    context.pop();
+  } else {
+    context.go('/home');
   }
 }
 
@@ -460,10 +492,9 @@ class _BookNoteEditorState extends ConsumerState<_BookNoteEditor> {
   Future<void> _save() async {
     setState(() => _saving = true);
     try {
-      await ref.read(libraryRepositoryProvider).updatePersonalNote(
-        widget.book.id,
-        _note.text,
-      );
+      await ref
+          .read(libraryRepositoryProvider)
+          .updatePersonalNote(widget.book.id, _note.text);
       _dirty = false;
       if (mounted) {
         showMessage(context, 'Заметка сохранена.');

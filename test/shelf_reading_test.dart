@@ -39,9 +39,22 @@ void main() {
     expect(shelves.first.books.first.title, 'Мастер и Маргарита');
     expect(shelves.first.books.first.title.contains('http'), isFalse);
     expect(shelves.first.books.first.author, 'Булгаков');
+    expect(shelves.first.books.first.isbn, isEmpty);
     expect(shelves.first.books[1].author, isEmpty);
     expect(shelves.first.books[1].uncertain, isFalse);
     expect(shelves[1].books.single.uncertain, isTrue);
+  });
+
+  test('keeps a visible ISBN and drops a number that is not an ISBN', () {
+    final shelves = parseShelfReading('''
+{"shelves":[{"books":[
+  {"title":"Война и мир","author":"Толстой","isbn":"978-5-17-115604-6","uncertain":false},
+  {"title":"Другая","author":"Автор","isbn":"123","uncertain":false}
+]}]}
+''');
+
+    expect(shelves.single.books.first.isbn, '9785171156046');
+    expect(shelves.single.books.last.isbn, isEmpty);
   });
 
   test('drops spines written only in characters other than letters', () {

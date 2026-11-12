@@ -1,22 +1,37 @@
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 
-class AppShell extends StatelessWidget {
-  const AppShell({super.key, required this.navigationShell});
+const shellTabLocations = ['/home', '/search', '/add', '/settings'];
 
-  final StatefulNavigationShell navigationShell;
+StatefulNavigationShell? libraryNavigationShell;
+
+class AppShell extends StatelessWidget {
+  const AppShell({
+    super.key,
+    required this.child,
+    required this.location,
+    required this.navigationShell,
+  });
+
+  final Widget child;
+  final String location;
+  final StatefulNavigationShell? navigationShell;
 
   @override
   Widget build(BuildContext context) {
+    final onBook = location == '/book' || location.startsWith('/book/');
+    final selected = navigationShell?.currentIndex ?? 0;
     return Scaffold(
-      body: navigationShell,
+      body: child,
       bottomNavigationBar: NavigationBar(
-        selectedIndex: navigationShell.currentIndex,
+        selectedIndex: selected,
         onDestinationSelected: (index) {
-          navigationShell.goBranch(
-            index,
-            initialLocation: index == navigationShell.currentIndex,
-          );
+          final shell = navigationShell;
+          if (onBook || shell == null) {
+            context.go(shellTabLocations[index]);
+            return;
+          }
+          shell.goBranch(index, initialLocation: index == shell.currentIndex);
         },
         destinations: const [
           NavigationDestination(

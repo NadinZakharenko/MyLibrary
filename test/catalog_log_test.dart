@@ -141,29 +141,32 @@ void main() {
     },
   );
 
-  test('a print search keeps the Yandex text book and hides the token', () async {
-    const secret = 'y0_secret_token';
-    final records = <CatalogRequestRecord>[];
-    final service = MetadataService(
-      client: _catalogThenYandex(),
-      yandexToken: () async => secret,
-      log: (record) async => records.add(record),
-    );
-    addTearDown(service.close);
+  test(
+    'a print search keeps the Yandex text book and hides the token',
+    () async {
+      const secret = 'y0_secret_token';
+      final records = <CatalogRequestRecord>[];
+      final service = MetadataService(
+        client: _catalogThenYandex(),
+        yandexToken: () async => secret,
+        log: (record) async => records.add(record),
+      );
+      addTearDown(service.close);
 
-    final results = await service.search(title: 'Мастер и Маргарита');
+      final results = await service.search(title: 'Мастер и Маргарита');
 
-    expect(results.single.source, MetadataSource.yandexBooks);
-    expect(results.single.title, 'Мастер и Маргарита');
-    expect(results.single.workKey, 'txt');
-    expect(results.single.sourceUrl, 'https://books.yandex.ru/books/txt');
-    expect(results.single.narrator, isEmpty);
-    expect(records.last.resultCount, 1);
-    final dumped = records
-        .map((record) => '${record.detail} ${record.error}')
-        .join('\n');
-    expect(dumped.contains(secret), isFalse);
-  });
+      expect(results.single.source, MetadataSource.yandexBooks);
+      expect(results.single.title, 'Мастер и Маргарита');
+      expect(results.single.workKey, 'txt');
+      expect(results.single.sourceUrl, 'https://books.yandex.ru/books/txt');
+      expect(results.single.narrator, isEmpty);
+      expect(records.last.resultCount, 1);
+      final dumped = records
+          .map((record) => '${record.detail} ${record.error}')
+          .join('\n');
+      expect(dumped.contains(secret), isFalse);
+    },
+  );
 
   test('an audio search keeps the Yandex audiobook', () async {
     final service = MetadataService(
@@ -336,6 +339,55 @@ void main() {
     expect(found.last.authors, ['Джон Р. Р. Толкин']);
   });
 
+  test('reads the ISBN from a LiveLib book page', () {
+    expect(
+      liveLibPageIsbn('<div>ISBN:</div><div>978-5-00180-969-2</div>'),
+      '9785001809692',
+    );
+  });
+
+  test('a title search writes the LiveLib page ISBN onto the result', () async {
+    final client = MockClient((request) async {
+      if (request.url.host == 'lbc.rsl.ru') {
+        return http.Response(
+          '<set><hits>0</hits><records></records></set>',
+          200,
+        );
+      }
+      if (request.url.path.startsWith('/book/')) {
+        return http.Response(
+          '<div>ISBN:</div><div>978-5-17-115604-6</div>',
+          200,
+          headers: const {'content-type': 'text/html; charset=utf-8'},
+        );
+      }
+      return http.Response(
+        '<a href="/book/10-voina" class="title">Война и мир</a>'
+        '<a href="/author/1">Толстой</a>',
+        200,
+        headers: const {'content-type': 'text/html; charset=utf-8'},
+      );
+    });
+    final service = MetadataService(client: client);
+    addTearDown(service.close);
+
+    final results = await service.search(title: 'Война и мир');
+
+    expect(results.single.isbn, '9785171156046');
+    expect(results.single.source, MetadataSource.liveLib);
+  });
+
+  test('reads a labeled ISBN from a LiveLib title card', () {
+    final found = candidatesFromLiveLib(
+      '<a href="/book/10-voina" class="title">Война и мир</a>'
+      '<a href="/author/1-tolstoy">Толстой</a>'
+      '<span>ISBN 978-5-17-115604-6</span>',
+      isbn: '',
+    );
+
+    expect(found.single.isbn, '9785171156046');
+  });
+
   test(
     'does not collapse different LiveLib titles that share the query ISBN',
     () async {
@@ -376,10 +428,7 @@ void main() {
 MockClient _catalogThenYandex() {
   return MockClient((request) async {
     if (request.url.host == 'lbc.rsl.ru') {
-      return http.Response(
-        '<set><hits>0</hits><records></records></set>',
-        200,
-      );
+      return http.Response('<set><hits>0</hits><records></records></set>', 200);
     }
     if (request.url.host == 'www.livelib.ru') {
       return http.Response(

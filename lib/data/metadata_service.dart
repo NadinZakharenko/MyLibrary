@@ -27,12 +27,8 @@ typedef ModelTextLookup = Future<List<MetadataCandidate>> Function({
 });
 
 class MetadataService {
-  MetadataService({
-    http.Client? client,
-    this.log,
-    this.model,
-    this.yandexToken,
-  }) : _client = client ?? http.Client();
+  MetadataService({http.Client? client, this.log, this.model, this.yandexToken})
+    : _client = client ?? http.Client();
 
   final http.Client _client;
   final CatalogRequestLog? log;
@@ -59,9 +55,7 @@ class MetadataService {
       return const [];
     }
     final yandexSecret = (await yandexToken?.call())?.trim() ?? '';
-    final secrets = <String>[
-      if (yandexSecret.length >= 6) yandexSecret,
-    ];
+    final secrets = <String>[if (yandexSecret.length >= 6) yandexSecret];
 
     final results = <MetadataCandidate>[];
     var reachedCatalog = false;
@@ -203,10 +197,8 @@ class MetadataService {
     required BookFormat format,
   }) async {
     try {
-      final hits = await YandexBooksClient(httpClient: _client).searchBooks(
-        token: token,
-        query: query,
-      );
+      final hits = await YandexBooksClient(httpClient: _client)
+          .searchBooks(token: token, query: query);
       final audio = switch (format) {
         BookFormat.print => false,
         BookFormat.audio => true,
@@ -324,6 +316,46 @@ class MetadataService {
     }
   }
 
+  Future<List<MetadataCandidate>> _liveLibEditionIsbns(
+    List<MetadataCandidate> candidates,
+  ) async {
+    if (candidates.isEmpty ||
+        candidates.every((item) => item.isbn.trim().isNotEmpty)) {
+      return candidates;
+    }
+    return Future.wait(
+      candidates.map((candidate) async {
+        if (candidate.isbn.trim().isNotEmpty) {
+          return candidate;
+        }
+        final page = candidate.sourceUrl?.trim() ?? '';
+        if (page.isEmpty) {
+          return candidate;
+        }
+        try {
+          final response = await _client
+              .get(
+                Uri.parse(page),
+                headers: const {'User-Agent': userAgent, 'Accept': 'text/html'},
+              )
+              .timeout(const Duration(seconds: 15));
+          if (response.statusCode != 200) {
+            return candidate;
+          }
+          final isbn = liveLibPageIsbn(
+            utf8.decode(response.bodyBytes, allowMalformed: true),
+          );
+          if (isbn.isEmpty) {
+            return candidate;
+          }
+          return candidate.copyWith(isbn: isbn);
+        } catch (_) {
+          return candidate;
+        }
+      }),
+    );
+  }
+
   Future<List<MetadataCandidate>> _liveLib({
     required String query,
     required String kind,
@@ -336,10 +368,7 @@ class MetadataService {
       final response = await _client
           .get(
             uri,
-            headers: const {
-              'User-Agent': userAgent,
-              'Accept': 'text/html',
-            },
+            headers: const {'User-Agent': userAgent, 'Accept': 'text/html'},
           )
           .timeout(const Duration(seconds: 20));
       if (response.statusCode != 200) {
@@ -354,7 +383,9 @@ class MetadataService {
         return const [];
       }
       final html = utf8.decode(response.bodyBytes, allowMalformed: true);
-      final parsed = candidatesFromLiveLib(html, isbn: isbn);
+      final parsed = await _liveLibEditionIsbns(
+        candidatesFromLiveLib(html, isbn: isbn),
+      );
       await _record(
         catalog: 'LiveLib',
         kind: kind,

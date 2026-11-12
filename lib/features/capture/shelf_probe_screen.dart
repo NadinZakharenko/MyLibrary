@@ -265,6 +265,7 @@ class _ShelfProbeScreenState extends ConsumerState<ShelfProbeScreen> {
     return BookDraft(
       title: spine.title.trim(),
       authors: author.isEmpty ? const [] : [author],
+      isbn: spine.isbn.trim(),
       shelfId: shelfId,
       rowId: rowId,
     );
@@ -347,9 +348,11 @@ class _ShelfProbeScreenState extends ConsumerState<ShelfProbeScreen> {
     setState(() => _busy = true);
     List<MetadataCandidate> results = const [];
     try {
+      final isbn = spine.isbn.trim();
       results = await ref
           .read(metadataServiceProvider)
           .search(
+            isbn: isbn.isEmpty ? null : isbn,
             title: spine.title.trim().length >= 2 ? spine.title.trim() : null,
             author: spine.author.trim().length >= 2
                 ? spine.author.trim()

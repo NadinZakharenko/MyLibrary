@@ -1,15 +1,19 @@
 import 'dart:convert';
 
+import 'package:my_library/core/isbn.dart';
+
 class RecognizedSpine {
   const RecognizedSpine({
     required this.title,
     required this.author,
     required this.uncertain,
+    this.isbn = '',
   });
 
   final String title;
   final String author;
   final bool uncertain;
+  final String isbn;
 }
 
 class RecognizedShelf {
@@ -30,9 +34,9 @@ class ShelfReadingException implements Exception {
 const shelfReadingPrompt = '''
 На фото русские корешки книг. Полок на снимке может быть одна, две или три, сверху вниз. Книги на каждой полке идут слева направо.
 Верни только JSON такого вида:
-{"shelves":[{"books":[{"title":"","author":"","uncertain":false}]}]}
+{"shelves":[{"books":[{"title":"","author":"","isbn":"","uncertain":false}]}]}
 title и author — только текст, который виден на корешке. Пиши кириллицей, как на корешке. Если на корешке латиница, оставь её. Не используй китайские иероглифы. Если текста нет, оставь пустую строку. uncertain поставь true, если чтение сомнительное.
-Не выдумывай ISBN, издательство и описание. Не добавляй другие поля.
+isbn — только цифры ISBN, если они напечатаны на корешке или обложке. Если цифр не видно, оставь пустую строку. Не выдумывай номер, издательство и описание. Не добавляй другие поля.
 ''';
 
 const _maxShelves = 3;
@@ -80,6 +84,7 @@ List<RecognizedShelf> parseShelfReading(String raw) {
         RecognizedSpine(
           title: title,
           author: author,
+          isbn: _isbn(book['isbn']),
           uncertain: book['uncertain'] == true,
         ),
       );
@@ -96,6 +101,13 @@ String? _extractObject(String raw) {
     return null;
   }
   return raw.substring(start, end + 1);
+}
+
+String _isbn(Object? value) {
+  if (value is! String) {
+    return '';
+  }
+  return isbnFromText(value) ?? '';
 }
 
 String _field(Object? value) {

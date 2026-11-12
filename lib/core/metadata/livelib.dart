@@ -1,3 +1,4 @@
+import 'package:my_library/core/isbn.dart';
 import 'package:my_library/core/models/metadata_candidate.dart';
 
 /// Public search. The path segment is the query.
@@ -67,7 +68,7 @@ List<MetadataCandidate> _cards(
         authors: author.isEmpty ? const [] : [author],
         genres: _genres(tail),
         year: _yearNear(html, match.end, kind),
-        isbn: isbn,
+        isbn: isbn.trim().isNotEmpty ? isbn.trim() : _labeledIsbn(tail),
         coverUrl: _coverBefore(html, match.start),
         sourceUrl: 'https://www.livelib.ru${match.group(1)}',
       ),
@@ -85,6 +86,22 @@ String _yearNear(String html, int end, String kind) {
   final card = next == null ? tail : tail.substring(0, next.start);
   return RegExp(r'(?<!\d)(\d{4})(?!\d)').firstMatch(_plain(card))?.group(1) ??
       '';
+}
+
+String liveLibPageIsbn(String html) {
+  final plain = _plain(html);
+  final match = RegExp(
+    r'ISBN(?:-1[03])?\s*:?\s*([0-9][0-9X\-\s]{8,22})',
+    caseSensitive: false,
+  ).firstMatch(plain);
+  if (match == null) {
+    return '';
+  }
+  return isbnFromText(match.group(1) ?? '') ?? '';
+}
+
+String _labeledIsbn(String html) {
+  return liveLibPageIsbn(html);
 }
 
 bool _isEditionCount(String title) {

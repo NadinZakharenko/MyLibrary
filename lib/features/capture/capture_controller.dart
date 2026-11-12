@@ -311,18 +311,22 @@ class CaptureController extends Notifier<CaptureState> {
           yandex: ref.read(yandexShelfReaderProvider),
         );
         if (seen != null) {
+          final isbn =
+              scannedIsbn ??
+              (seen.isbn.trim().isEmpty ? null : seen.isbn.trim()) ??
+              await _printedIsbn(absolutePath);
           await _log(
             'Разбор фото',
-            'модель «${seen.title}», ISBN ${scannedIsbn ?? "нет"}',
+            'модель «${seen.title}», ISBN ${isbn ?? "нет"}',
           );
           final candidates = await _searchQuietly(
-            isbn: scannedIsbn,
+            isbn: isbn,
             title: seen.title,
             author: seen.author,
           );
           final seed = BookDraft(
             localKey: _key(),
-            isbn: scannedIsbn ?? '',
+            isbn: isbn ?? '',
             title: seen.title,
             authors: seen.author.trim().isEmpty ? const [] : [seen.author.trim()],
             photoPaths: [photoPath],
@@ -434,6 +438,29 @@ class CaptureController extends Notifier<CaptureState> {
     } catch (error) {
       state = state.copyWith(error: userFacingError(error));
       return const [];
+    }
+  }
+
+  Future<String?> _printedIsbn(String absolutePath) async {
+    if (!deviceCaptureSupported) {
+      return null;
+    }
+    try {
+      final latin = await ref
+          .read(coverTextRecognizerProvider)
+          .recognizeFile(absolutePath);
+      final fromDigits = isbnFromText(latin ?? '');
+      if (fromDigits != null) {
+        return fromDigits;
+      }
+    } catch (_) {}
+    try {
+      final russian = await ref
+          .read(spineScriptRecognizerProvider)
+          .recognizeFile(absolutePath);
+      return isbnFromText(readableSpineText(russian));
+    } catch (_) {
+      return null;
     }
   }
 

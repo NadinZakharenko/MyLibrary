@@ -205,9 +205,11 @@ class _ShelfMarkScreenState extends ConsumerState<ShelfMarkScreen> {
       return;
     }
     final cleaned = readableSpineText(text);
-    final isbn = modelBook == null
-        ? isbnFromText(cleaned)
-        : await _isbnFromStrip(_strips[_index]);
+    final isbn = await _isbnForStrip(
+      strip: _strips[_index],
+      modelBook: modelBook,
+      recognized: cleaned,
+    );
     final query = spineSearchQuery(cleaned);
     final titleQuery = modelBook != null
         ? modelBook.title
@@ -293,6 +295,35 @@ class _ShelfMarkScreenState extends ConsumerState<ShelfMarkScreen> {
       if (mounted) {
         setState(() => _error = userFacingError(error));
       }
+      return null;
+    }
+  }
+
+  Future<String?> _isbnForStrip({
+    required File strip,
+    required RecognizedSpine? modelBook,
+    required String recognized,
+  }) async {
+    final seen = modelBook?.isbn.trim() ?? '';
+    if (seen.isNotEmpty) {
+      return seen;
+    }
+    final barcode = await _isbnFromStrip(strip);
+    if (barcode != null) {
+      return barcode;
+    }
+    if (modelBook == null) {
+      return isbnFromText(recognized);
+    }
+    if (!deviceCaptureSupported) {
+      return null;
+    }
+    try {
+      final latin = await ref
+          .read(coverTextRecognizerProvider)
+          .recognizeFile(strip.path);
+      return isbnFromText(latin ?? '');
+    } catch (_) {
       return null;
     }
   }

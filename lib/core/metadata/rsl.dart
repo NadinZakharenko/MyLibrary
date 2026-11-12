@@ -223,15 +223,7 @@ String _imprint(String publisher, String year, {required String fallback}) {
 }
 
 String _isbn(String raw) {
-  final normalized = normalizeIsbn(raw);
-  if (normalized != null) {
-    return normalized;
-  }
-  final digits = raw.toUpperCase().replaceAll(RegExp(r'[^0-9X]'), '');
-  if (digits.length == 10 || digits.length == 13) {
-    return digits;
-  }
-  return '';
+  return isbnFromText(raw) ?? '';
 }
 
 int? _volume(String raw) {
