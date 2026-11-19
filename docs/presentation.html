@@ -1,0 +1,246 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Моя библиотека — краткая документация</title>
+  <style>
+    :root {
+      --ink: #1c1916;
+      --muted: #5c564e;
+      --line: #e4ddd4;
+      --paper: #faf7f2;
+      --card: #fff;
+      --accent: #6b3f2a;
+      --accent-soft: #f3ebe4;
+    }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      color: var(--ink);
+      background: var(--paper);
+      font: 17px/1.5 "Segoe UI", sans-serif;
+    }
+    main { max-width: 980px; margin: 0 auto; padding: 48px 24px 80px; }
+    h1 { font-size: 40px; line-height: 1.15; margin: 0 0 12px; font-weight: 650; }
+    h2 { font-size: 26px; margin: 48px 0 12px; font-weight: 650; }
+    h3 { font-size: 18px; margin: 0 0 8px; }
+    p { margin: 0 0 12px; }
+    .lead { font-size: 20px; color: var(--muted); max-width: 42em; }
+    .kicker { letter-spacing: 0.08em; text-transform: uppercase; font-size: 12px; color: var(--accent); margin-bottom: 8px; }
+    section { break-inside: avoid; }
+    .grid { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
+    .card { background: var(--card); border: 1px solid var(--line); border-radius: 12px; padding: 16px 18px; }
+    ul { margin: 0; padding-left: 18px; }
+    li + li { margin-top: 6px; }
+    figure { margin: 16px 0 0; }
+    figcaption { color: var(--muted); font-size: 14px; margin-top: 8px; }
+    svg { width: 100%; height: auto; display: block; }
+    .shot-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 12px; }
+    .shot-grid img { width: 100%; border: 1px solid var(--line); border-radius: 12px; background: #fff; }
+    .shot-grid figcaption { text-align: center; }
+    @media (max-width: 800px) {
+      .grid, .shot-grid { grid-template-columns: 1fr; }
+      h1 { font-size: 32px; }
+    }
+    @media print {
+      body { background: #fff; }
+      main { padding: 0; }
+      section { break-before: page; }
+      section:first-of-type { break-before: auto; }
+    }
+  </style>
+</head>
+<body>
+<main>
+  <section>
+    <p class="kicker">Локальное приложение для телефона</p>
+    <h1>Моя библиотека</h1>
+    <p class="lead">Каталог бумажных книг, который живёт на телефоне. Книгу можно найти по месту на полке и добавить по ISBN, фото или снимку полки целиком, не набирая каждый корешок руками.</p>
+    <div class="grid">
+      <article class="card">
+        <h3>Для кого</h3>
+        <p>Для человека, у которого дома уже много книг и который перестаёт помнить, в каком шкафу какая стоит. Отдельный случай — книга ушла в библиотеку или кому-то на руки, и о сроке легко забыть.</p>
+      </article>
+      <article class="card">
+        <h3>Какую проблему закрывает</h3>
+        <p>Ручной учёт слишком долгий, а фото полки само по себе не отвечает, где книга. Приложение превращает снимок, штрихкод или название в карточку с местом: комната, шкаф, полка, ряд.</p>
+      </article>
+    </div>
+  </section>
+
+  <section>
+    <h2>Что умеет</h2>
+    <div class="grid">
+      <article class="card">
+        <h3>Главная</h3>
+        <ul>
+          <li>Комнаты, шкафы, полки и ряды.</li>
+          <li>Сводка: всего, за неделю, без места, читаю, прочитано, на руках, просрочено, вернуть в библиотеку.</li>
+          <li>Порядок блоков и комнат настраивается.</li>
+        </ul>
+      </article>
+      <article class="card">
+        <h3>Поиск</h3>
+        <ul>
+          <li>По названию, автору, ISBN и хэштегу.</li>
+          <li>Карточка открывается внутри вкладки «Поиск».</li>
+        </ul>
+      </article>
+      <article class="card">
+        <h3>Добавить</h3>
+        <ul>
+          <li>Штрихкод ISBN, одно фото, несколько фото, название вручную.</li>
+          <li>Полка целиком: модель читает корешки, к недоделанному снимку можно вернуться.</li>
+          <li>Перед сохранением проверка, нет ли книги уже в базе.</li>
+        </ul>
+      </article>
+      <article class="card">
+        <h3>Карточка и настройки</h3>
+        <ul>
+          <li>Место, заметка, хэштеги, выдача на руки, срок возврата в библиотеку.</li>
+          <li>Ключи моделей вводятся в приложении и не лежат в исходниках.</li>
+          <li>Резервная копия базы и фото. Журнал действий можно выключить.</li>
+        </ul>
+      </article>
+    </div>
+  </section>
+
+  <section>
+    <h2>Как устроена работа</h2>
+    <p>Книги, фото и структура шкафов остаются на телефоне. Снимок уходит в модель только после отдельного разрешения. Каталоги нужны, чтобы дополнить карточку, а не чтобы хранить библиотеку.</p>
+    <figure>
+      <svg viewBox="0 0 920 560" role="img" aria-label="Схема: телефон, локальные инструменты, модели и каталоги">
+        <style>
+          .box { fill: #fff; stroke: #d9d0c6; }
+          .soft { fill: #f3ebe4; stroke: #6b3f2a; }
+          .label { font: 15px "Segoe UI", sans-serif; fill: #1c1916; }
+          .small { font: 13px "Segoe UI", sans-serif; fill: #5c564e; }
+          .arrow { stroke: #6b3f2a; fill: none; stroke-width: 1.5; }
+        </style>
+        <rect class="soft" x="20" y="20" width="200" height="64" rx="10"/>
+        <text class="label" x="120" y="58" text-anchor="middle">Телефон</text>
+
+        <rect class="box" x="20" y="120" width="200" height="150" rx="10"/>
+        <text class="label" x="120" y="150" text-anchor="middle">Четыре вкладки</text>
+        <text class="small" x="120" y="174" text-anchor="middle">Главная</text>
+        <text class="small" x="120" y="194" text-anchor="middle">Поиск</text>
+        <text class="small" x="120" y="214" text-anchor="middle">Добавить</text>
+        <text class="small" x="120" y="234" text-anchor="middle">Настройки</text>
+
+        <rect class="box" x="280" y="120" width="250" height="190" rx="10"/>
+        <text class="label" x="405" y="150" text-anchor="middle">На телефоне</text>
+        <text class="small" x="405" y="178" text-anchor="middle">База SQLite</text>
+        <text class="small" x="405" y="198" text-anchor="middle">Фото обложек и полок</text>
+        <text class="small" x="405" y="218" text-anchor="middle">Сканер ISBN</text>
+        <text class="small" x="405" y="238" text-anchor="middle">Распознавание текста</text>
+        <text class="small" x="405" y="258" text-anchor="middle">Уменьшение снимка</text>
+        <text class="small" x="405" y="278" text-anchor="middle">Напоминания о сроке</text>
+
+        <rect class="box" x="590" y="40" width="300" height="150" rx="10"/>
+        <text class="label" x="740" y="70" text-anchor="middle">Модели, по разрешению</text>
+        <text class="small" x="740" y="98" text-anchor="middle">Kimi — фото, текст, голос</text>
+        <text class="small" x="740" y="118" text-anchor="middle">Яндекс Qwen — фото полки</text>
+        <text class="small" x="740" y="138" text-anchor="middle">ЯндексGPT — текст заметки</text>
+        <text class="small" x="740" y="158" text-anchor="middle">SpeechKit — запись голоса</text>
+
+        <rect class="box" x="590" y="220" width="300" height="130" rx="10"/>
+        <text class="label" x="740" y="250" text-anchor="middle">Каталоги</text>
+        <text class="small" x="740" y="278" text-anchor="middle">РГБ</text>
+        <text class="small" x="740" y="298" text-anchor="middle">LiveLib</text>
+        <text class="small" x="740" y="318" text-anchor="middle">Яндекс Книги</text>
+
+        <rect class="soft" x="280" y="400" width="610" height="120" rx="10"/>
+        <text class="label" x="585" y="436" text-anchor="middle">Карточка книги</text>
+        <text class="small" x="585" y="464" text-anchor="middle">Название, автор, ISBN, место, заметка, хэштеги</text>
+        <text class="small" x="585" y="486" text-anchor="middle">Проверка дубля: ISBN, название и автор, или одно название</text>
+
+        <path class="arrow" d="M120 84 V120" marker-end="url(#arrow)"/>
+        <path class="arrow" d="M220 190 H280" marker-end="url(#arrow)"/>
+        <path class="arrow" d="M530 180 H590" marker-end="url(#arrow)"/>
+        <path class="arrow" d="M530 250 H590" marker-end="url(#arrow)"/>
+        <path class="arrow" d="M405 310 V400" marker-end="url(#arrow)"/>
+        <path class="arrow" d="M740 350 V400" marker-end="url(#arrow)"/>
+        <defs>
+          <marker id="arrow" markerWidth="8" markerHeight="8" refX="7" refY="4" orient="auto">
+            <path d="M0 0 L8 4 L0 8 Z" fill="#6b3f2a"/>
+          </marker>
+        </defs>
+      </svg>
+      <figcaption>Данные библиотеки остаются на телефоне. Модели и каталоги только дополняют карточку.</figcaption>
+    </figure>
+  </section>
+
+  <section>
+    <h2>Как добавляется книга</h2>
+    <figure>
+      <svg viewBox="0 0 920 150" role="img" aria-label="Цепочка добавления книги">
+        <style>
+          .step { fill: #fff; stroke: #d9d0c6; }
+          .step-label { font: 14px "Segoe UI", sans-serif; fill: #1c1916; }
+          .arrow { stroke: #6b3f2a; fill: none; stroke-width: 1.5; }
+        </style>
+        <rect class="step" x="10" y="40" width="140" height="70" rx="10"/>
+        <text class="step-label" x="80" y="80" text-anchor="middle">ISBN, фото</text>
+        <text class="step-label" x="80" y="98" text-anchor="middle">или полка</text>
+        <rect class="step" x="190" y="40" width="140" height="70" rx="10"/>
+        <text class="step-label" x="260" y="80" text-anchor="middle">Чтение</text>
+        <text class="step-label" x="260" y="98" text-anchor="middle">на телефоне</text>
+        <rect class="step" x="370" y="40" width="150" height="70" rx="10"/>
+        <text class="step-label" x="445" y="80" text-anchor="middle">Модель,</text>
+        <text class="step-label" x="445" y="98" text-anchor="middle">если разрешено</text>
+        <rect class="step" x="560" y="40" width="140" height="70" rx="10"/>
+        <text class="step-label" x="630" y="80" text-anchor="middle">Каталог</text>
+        <text class="step-label" x="630" y="98" text-anchor="middle">и дубли</text>
+        <rect class="step" x="740" y="40" width="160" height="70" rx="10"/>
+        <text class="step-label" x="820" y="80" text-anchor="middle">Карточка</text>
+        <text class="step-label" x="820" y="98" text-anchor="middle">и место</text>
+        <path class="arrow" d="M150 75 H190" marker-end="url(#arrow2)"/>
+        <path class="arrow" d="M330 75 H370" marker-end="url(#arrow2)"/>
+        <path class="arrow" d="M520 75 H560" marker-end="url(#arrow2)"/>
+        <path class="arrow" d="M700 75 H740" marker-end="url(#arrow2)"/>
+        <defs>
+          <marker id="arrow2" markerWidth="8" markerHeight="8" refX="7" refY="4" orient="auto">
+            <path d="M0 0 L8 4 L0 8 Z" fill="#6b3f2a"/>
+          </marker>
+        </defs>
+      </svg>
+      <figcaption>Если с полки сохранены не все корешки, тот же снимок открывается снова. Повторно отправлять его в модель не нужно. Шаги мастера идут на весь экран, без нижней панели.</figcaption>
+    </figure>
+    <div class="grid">
+      <article class="card">
+        <h3>Что остаётся локальным</h3>
+        <p>База, обложки, фото полок, недоделанный снимок полки, журнал. В резервную копию входят база и фото. Ключи и незаконченный снимок полки в архив не попадают.</p>
+      </article>
+      <article class="card">
+        <h3>Что спрашивает разрешение</h3>
+        <p>Отправка фото полки в Kimi или Яндекс. Приведение голосовой заметки в порядок. Без разрешения корешки можно разметить чертами на самом телефоне.</p>
+      </article>
+    </div>
+  </section>
+
+  <section id="screens">
+    <h2>Основные окна</h2>
+    <p>Снимки текущей сборки с телефона. Карточка книги открывается внутри той вкладки, откуда её вызвали.</p>
+    <div class="shot-grid">
+      <figure>
+        <img src="screens/home.png" alt="Вкладка Главная: сводка книг">
+        <figcaption>Главная</figcaption>
+      </figure>
+      <figure>
+        <img src="screens/search.png" alt="Вкладка Поиск: строка поиска и найденные книги">
+        <figcaption>Поиск</figcaption>
+      </figure>
+      <figure>
+        <img src="screens/add.png" alt="Вкладка Добавить: способы найти книгу">
+        <figcaption>Добавить</figcaption>
+      </figure>
+      <figure>
+        <img src="screens/settings.png" alt="Вкладка Настройки: заметки и журнал">
+        <figcaption>Настройки</figcaption>
+      </figure>
+    </div>
+  </section>
+</main>
+</body>
+</html>
