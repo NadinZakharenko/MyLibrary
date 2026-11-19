@@ -21,6 +21,7 @@ import 'package:my_library/data/library_repository.dart';
 import 'package:my_library/data/metadata_service.dart';
 import 'package:my_library/data/mlkit_cover_text_recognizer.dart';
 import 'package:my_library/data/shelf_model_client.dart';
+import 'package:my_library/data/shelf_session_store.dart';
 import 'package:my_library/data/spine_text_recognizer.dart';
 
 final libraryPathsProvider = Provider<LibraryPaths>((ref) {
@@ -39,6 +40,14 @@ final databaseProvider = Provider((ref) {
 
 final imageStoreProvider = Provider<ImageStore>((ref) {
   return ImageStore(ref.watch(libraryPathsProvider));
+});
+
+final shelfSessionStoreProvider = Provider<ShelfSessionStore>((ref) {
+  return ShelfSessionStore(ref.watch(libraryPathsProvider));
+});
+
+final shelfSessionProvider = FutureProvider<ShelfSession?>((ref) {
+  return ref.watch(shelfSessionStoreProvider).load();
 });
 
 class CatalogSendConsent {

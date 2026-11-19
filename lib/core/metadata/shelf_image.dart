@@ -1,3 +1,4 @@
+import 'dart:isolate';
 import 'dart:math' as math;
 import 'dart:typed_data';
 
@@ -12,6 +13,11 @@ class ShelfImageException implements Exception {
 
   @override
   String toString() => message;
+}
+
+/// Same as [downscaleJpeg], off the UI isolate.
+Future<Uint8List> downscaleJpegInBackground(Uint8List bytes) {
+  return Isolate.run(() => downscaleJpeg(bytes));
 }
 
 Uint8List downscaleJpeg(Uint8List bytes, {int maxSide = shelfImageMaxSide}) {

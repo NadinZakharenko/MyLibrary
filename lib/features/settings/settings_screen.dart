@@ -147,7 +147,7 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
             const SizedBox(height: 12),
             TextField(
               controller: _kimiKey,
-              decoration: const InputDecoration(labelText: 'Ключ Kimi API'),
+              decoration: const InputDecoration(labelText: 'Ключ доступа Kimi'),
               obscureText: true,
               autocorrect: false,
               enableSuggestions: false,
@@ -166,7 +166,7 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
             const SizedBox(height: 12),
             TextField(
               controller: _yandexKey,
-              decoration: const InputDecoration(labelText: 'Ключ API Яндекса'),
+              decoration: const InputDecoration(labelText: 'Ключ доступа Яндекса'),
               obscureText: true,
               autocorrect: false,
               enableSuggestions: false,
@@ -219,7 +219,7 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
             const SizedBox(height: 12),
             TextField(
               controller: _kimiKey,
-              decoration: const InputDecoration(labelText: 'Ключ Kimi API'),
+              decoration: const InputDecoration(labelText: 'Ключ доступа Kimi'),
               obscureText: true,
               autocorrect: false,
               enableSuggestions: false,
@@ -235,7 +235,7 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
             const SizedBox(height: 12),
             TextField(
               controller: _yandexKey,
-              decoration: const InputDecoration(labelText: 'Ключ API Яндекса'),
+              decoration: const InputDecoration(labelText: 'Ключ доступа Яндекса'),
               obscureText: true,
               autocorrect: false,
               enableSuggestions: false,

@@ -2,12 +2,14 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:my_library/core/format/copy_notes.dart';
+import 'package:my_library/core/models/book_copy.dart';
 import 'package:my_library/core/models/home_layout.dart';
 import 'package:my_library/core/models/library_view.dart';
 import 'package:my_library/features/books/book_bulk.dart';
 import 'package:my_library/features/library/structure_actions.dart';
 import 'package:my_library/providers/app_providers.dart';
 import 'package:my_library/ui/common_widgets.dart';
+import 'package:my_library/ui/open_book.dart';
 import 'package:my_library/ui/spine_plank.dart';
 
 class RowBooksScreen extends ConsumerWidget {
@@ -218,10 +220,10 @@ class _BookRow extends StatelessWidget {
       ),
       onTap: () {
         if (selecting) {
-          selection.toggle(book.id);
+          selection.toggle(book.id, audio: book.format == BookFormat.audio);
           return;
         }
-        context.push('/book/${book.id}');
+        openBook(context, book.id);
       },
     );
   }

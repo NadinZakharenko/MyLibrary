@@ -1,6 +1,6 @@
 import 'package:my_library/core/isbn.dart';
 
-enum DuplicateReason { isbn, titleAndAuthors }
+enum DuplicateReason { isbn, titleAndAuthors, titleOnly }
 
 class DuplicateCandidate {
   const DuplicateCandidate({
@@ -87,18 +87,26 @@ List<DuplicateMatch> findDuplicateCopies({
     if (title.isEmpty) {
       continue;
     }
-    final sameTitle = title == normalizeBookTitle(other.title);
-    final sameAuthors = _sameAuthors(authors, authorIdentity(other.authors));
-    if (sameTitle && sameAuthors) {
-      matches.add(
-        DuplicateMatch(
-          id: other.id!,
-          title: other.title,
-          locationPath: other.locationPath,
-          reason: DuplicateReason.titleAndAuthors,
-        ),
-      );
+    if (title != normalizeBookTitle(other.title)) {
+      continue;
     }
+    final otherAuthors = authorIdentity(other.authors);
+    final DuplicateReason reason;
+    if (_sameAuthors(authors, otherAuthors)) {
+      reason = DuplicateReason.titleAndAuthors;
+    } else if (authors.isEmpty || otherAuthors.isEmpty) {
+      reason = DuplicateReason.titleOnly;
+    } else {
+      continue;
+    }
+    matches.add(
+      DuplicateMatch(
+        id: other.id!,
+        title: other.title,
+        locationPath: other.locationPath,
+        reason: reason,
+      ),
+    );
   }
   return matches;
 }
@@ -119,5 +127,6 @@ String duplicateReasonLabel(DuplicateReason reason) {
   return switch (reason) {
     DuplicateReason.isbn => 'тот же ISBN',
     DuplicateReason.titleAndAuthors => 'то же название и те же авторы',
+    DuplicateReason.titleOnly => 'то же название (автор не указан)',
   };
 }

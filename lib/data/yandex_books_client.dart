@@ -228,9 +228,10 @@ class YandexBooksClient {
       if (secret.isNotEmpty) 'Auth-Token': secret,
     };
     final client = _http;
-    final response = client == null
-        ? await http.get(uri, headers: headers)
-        : await client.get(uri, headers: headers);
+    final response = await (client == null
+            ? http.get(uri, headers: headers)
+            : client.get(uri, headers: headers))
+        .timeout(_requestTimeout);
     if (response.statusCode < 200 || response.statusCode >= 300) {
       final reason = response.statusCode == 401
           ? ' Токен не принят. Нужен OAuth-токен Яндекс Книг.'
@@ -281,9 +282,10 @@ class YandexBooksClient {
       'query': _yandexSearchQuery,
     });
     final client = _http;
-    final response = client == null
-        ? await http.post(uri, headers: headers, body: payload)
-        : await client.post(uri, headers: headers, body: payload);
+    final response = await (client == null
+            ? http.post(uri, headers: headers, body: payload)
+            : client.post(uri, headers: headers, body: payload))
+        .timeout(_requestTimeout);
     if (response.statusCode < 200 || response.statusCode >= 300) {
       final reason = response.statusCode == 401
           ? ' Токен не принят. Нужен OAuth-токен Яндекс Книг.'
@@ -379,6 +381,8 @@ class YandexBooksClient {
         .trim();
   }
 }
+
+const _requestTimeout = Duration(seconds: 20);
 
 const _yandexSearchQuery = r'''
 query Search($query: SearchParamsInput!) {

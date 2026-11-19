@@ -120,6 +120,9 @@ class _AccountSettingsState extends ConsumerState<AccountSettings> {
                           .read(libraryRepositoryProvider)
                           .setYandexBooksReviewConsent(value);
                       ref.invalidate(catalogSendConsentProvider);
+                      if (!mounted) {
+                        return;
+                      }
                       setState(() => _review = value);
                     },
             ),
@@ -171,12 +174,15 @@ class _AccountSettingsState extends ConsumerState<AccountSettings> {
                           .read(libraryRepositoryProvider)
                           .setLivelibSendConsent(value);
                       ref.invalidate(catalogSendConsentProvider);
+                      if (!mounted) {
+                        return;
+                      }
                       setState(() => _livelib = value);
                     },
             ),
             FilledButton(
               onPressed: _busy ? null : _saveLiveLib,
-              child: const Text('Сохранить LiveLib'),
+              child: const Text('Сохранить вход в LiveLib'),
             ),
             const SizedBox(height: 8),
             OutlinedButton(
@@ -227,6 +233,9 @@ class _AccountSettingsState extends ConsumerState<AccountSettings> {
                       await ref
                           .read(libraryRepositoryProvider)
                           .setTelegramReminderEnabled(value);
+                      if (!mounted) {
+                        return;
+                      }
                       setState(() => _telegram = value);
                     },
             ),
@@ -269,6 +278,9 @@ class _AccountSettingsState extends ConsumerState<AccountSettings> {
                       await ref
                           .read(libraryRepositoryProvider)
                           .setMaxReminderEnabled(value);
+                      if (!mounted) {
+                        return;
+                      }
                       setState(() => _max = value);
                     },
             ),

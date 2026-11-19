@@ -27,6 +27,8 @@ class MessengerBots {
 
   final http.Client? _http;
 
+  static const _timeout = Duration(seconds: 20);
+
   Future<BotCheck> checkTelegram({
     required String expectedName,
     required String token,
@@ -189,9 +191,9 @@ class MessengerBots {
   Future<http.Response> _get(Uri uri, {Map<String, String>? headers}) {
     final client = _client(uri);
     if (client != null) {
-      return client.get(uri, headers: headers);
+      return client.get(uri, headers: headers).timeout(_timeout);
     }
-    return http.get(uri, headers: headers);
+    return http.get(uri, headers: headers).timeout(_timeout);
   }
 
   http.Client? _client(Uri uri) {
@@ -217,9 +219,9 @@ class MessengerBots {
     };
     final client = _client(uri);
     if (client != null) {
-      return client.post(uri, headers: sent, body: payload);
+      return client.post(uri, headers: sent, body: payload).timeout(_timeout);
     }
-    return http.post(uri, headers: sent, body: payload);
+    return http.post(uri, headers: sent, body: payload).timeout(_timeout);
   }
 
   Map<String, Object?> _object(String raw) {

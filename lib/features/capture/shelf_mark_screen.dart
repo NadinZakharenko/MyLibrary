@@ -1,4 +1,5 @@
 import 'dart:io';
+import 'dart:isolate';
 import 'dart:math' as math;
 import 'dart:typed_data';
 
@@ -99,8 +100,10 @@ class _ShelfMarkScreenState extends ConsumerState<ShelfMarkScreen> {
   Future<void> _load() async {
     try {
       final raw = await File(widget.imagePath).readAsBytes();
-      final jpeg = downscaleJpeg(raw);
-      final decoded = img.decodeImage(jpeg);
+      final (jpeg, decoded) = await Isolate.run(() {
+        final small = downscaleJpeg(raw);
+        return (small, img.decodeImage(small));
+      });
       if (decoded == null) {
         throw const ShelfImageException('Не удалось прочитать фото.');
       }

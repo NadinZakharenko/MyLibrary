@@ -37,6 +37,9 @@ class MetadataService {
 
   static const userAgent = 'MyLibrary/1.0 (personal home library)';
 
+  /// Edition pages opened per search to read an ISBN the result list omits.
+  static const _liveLibEditionPages = 3;
+
   Future<List<MetadataCandidate>> search({
     String? query,
     String? title,
@@ -323,11 +326,14 @@ class MetadataService {
         candidates.every((item) => item.isbn.trim().isNotEmpty)) {
       return candidates;
     }
+    var pages = 0;
     return Future.wait(
       candidates.map((candidate) async {
-        if (candidate.isbn.trim().isNotEmpty) {
+        if (candidate.isbn.trim().isNotEmpty ||
+            pages >= _liveLibEditionPages) {
           return candidate;
         }
+        pages++;
         final page = candidate.sourceUrl?.trim() ?? '';
         if (page.isEmpty) {
           return candidate;

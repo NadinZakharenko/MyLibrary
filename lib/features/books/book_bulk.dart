@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:my_library/core/models/dictionary_kind.dart';
 import 'package:my_library/core/models/reading_status.dart';
+import 'package:my_library/data/library_repository.dart';
 import 'package:my_library/providers/app_providers.dart';
 import 'package:my_library/ui/common_widgets.dart';
 import 'package:my_library/ui/dictionary_chips.dart';
@@ -13,8 +14,11 @@ class BookSelectionController extends ChangeNotifier {
   bool active = false;
   bool _disposed = false;
   final List<int> _ids = [];
+  final Set<int> _audio = {};
 
   List<int> get ids => List.unmodifiable(_ids);
+
+  bool get hasAudio => _ids.any(_audio.contains);
 
   bool isSelected(int id) => _ids.contains(id);
 
@@ -32,15 +36,21 @@ class BookSelectionController extends ChangeNotifier {
     }
     active = false;
     _ids.clear();
+    _audio.clear();
     notifyListeners();
   }
 
-  void toggle(int id) {
+  void toggle(int id, {bool audio = false}) {
     if (!active) {
       return;
     }
-    if (!_ids.remove(id)) {
+    if (_ids.remove(id)) {
+      _audio.remove(id);
+    } else {
       _ids.add(id);
+      if (audio) {
+        _audio.add(id);
+      }
     }
     notifyListeners();
   }
@@ -145,6 +155,10 @@ class BookBulkBar extends ConsumerWidget {
   }
 
   Future<void> _move(BuildContext context, WidgetRef ref) async {
+    if (selection.hasAudio) {
+      showMessage(context, audioOffShelfMessage);
+      return;
+    }
     final place = await showModalBottomSheet<({int? shelfId, int? rowId})>(
       context: context,
       isScrollControlled: true,

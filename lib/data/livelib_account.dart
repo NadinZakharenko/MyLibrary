@@ -16,12 +16,14 @@ class LiveLibAccount {
 
   final http.Client _client;
 
+  static const _timeout = Duration(seconds: 20);
+
   Future<LiveLibResult> check({
     required String login,
     required String password,
   }) async {
     try {
-      final home = await _client.get(_uri('/login'));
+      final home = await _client.get(_uri('/login')).timeout(_timeout);
       if (home.statusCode >= 400) {
         return LiveLibResult(
           ok: false,
@@ -55,7 +57,7 @@ class LiveLibAccount {
       return gate;
     }
     try {
-      final page = await _client.get(Uri.parse(bookUrl));
+      final page = await _client.get(Uri.parse(bookUrl)).timeout(_timeout);
       if (page.statusCode >= 400) {
         return LiveLibResult(
           ok: false,
@@ -77,7 +79,9 @@ class LiveLibAccount {
         form.fields[_textField(form.fields.keys) ?? 'text'] = review.trim();
         form.fields[_titleField(form.fields.keys) ?? 'title'] = reviewTitle.trim();
       }
-      final sent = await _client.post(form.action, body: form.fields);
+      final sent = await _client
+          .post(form.action, body: form.fields)
+          .timeout(_timeout);
       if (sent.statusCode >= 400) {
         return LiveLibResult(
           ok: false,
@@ -98,7 +102,9 @@ class LiveLibAccount {
     fields.putIfAbsent('user[login]', () => login.trim());
     fields.putIfAbsent('user[password]', () => password);
     final target = action?.action ?? _uri('/login');
-    final response = await _client.post(target, body: fields);
+    final response = await _client
+        .post(target, body: fields)
+        .timeout(_timeout);
     final body = response.body.toLowerCase();
     return body.contains('выйти') || body.contains('/reader/');
   }

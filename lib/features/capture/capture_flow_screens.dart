@@ -11,6 +11,7 @@ import 'package:my_library/ui/candidate_sheet.dart';
 import 'package:my_library/ui/common_widgets.dart';
 import 'package:my_library/ui/duplicate_prompt.dart';
 import 'package:my_library/ui/location_picker.dart';
+import 'package:my_library/ui/open_book.dart';
 
 class ManualLookupScreen extends ConsumerStatefulWidget {
   const ManualLookupScreen({super.key});
@@ -200,7 +201,7 @@ class DraftFormScreen extends ConsumerWidget {
         if (method == CaptureMethod.batchPhotos) {
           context.pop();
         } else {
-          context.go('/book/$id');
+          context.go('/add/book/$id');
         }
       },
     );
@@ -293,7 +294,7 @@ class BatchDraftsScreen extends ConsumerWidget {
                                     .setActive(index);
                                 context.push('/add/form');
                               }
-                            : () => context.push('/book/${draft.savedBookId}'),
+                            : () => openBook(context, draft.savedBookId!),
                       );
                     },
                   ),

@@ -70,6 +70,19 @@ class AppDatabase extends _$AppDatabase {
     },
     beforeOpen: (details) async {
       await customStatement('PRAGMA foreign_keys = ON');
+      for (final statement in _indexes) {
+        await customStatement(statement);
+      }
     },
   );
 }
+
+const _indexes = [
+  'CREATE INDEX IF NOT EXISTS books_row_position ON books (row_id, position_index)',
+  'CREATE INDEX IF NOT EXISTS books_shelf ON books (shelf_id)',
+  'CREATE INDEX IF NOT EXISTS books_placement ON books (placement)',
+  'CREATE INDEX IF NOT EXISTS book_photos_book ON book_photos (book_id)',
+  'CREATE INDEX IF NOT EXISTS cabinets_room ON cabinets (room_id)',
+  'CREATE INDEX IF NOT EXISTS shelves_cabinet ON shelves (cabinet_id)',
+  'CREATE INDEX IF NOT EXISTS shelf_rows_shelf ON shelf_rows (shelf_id)',
+];

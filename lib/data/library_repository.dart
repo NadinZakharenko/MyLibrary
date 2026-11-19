@@ -58,12 +58,18 @@ const backupSecretSettings = <String>[
   yandexApiKeySetting,
   yandexFolderIdSetting,
   yandexBooksTokenSetting,
+  livelibLoginSetting,
   livelibPasswordSetting,
   telegramBotTokenSetting,
   telegramChatIdSetting,
   maxBotTokenSetting,
   maxUserIdSetting,
 ];
+
+const _sharedLoadKey = #librarySharedLoad;
+
+const audioOffShelfMessage =
+    'Аудиокниги не ставятся на полку. Снимите с них отметку.';
 
 class ChooseRowException implements Exception {
   const ChooseRowException();
@@ -77,6 +83,12 @@ class LibraryRepository {
 
   /// Runs after a book is saved, moved, or deleted. Reminders use it.
   void Function()? afterBooksChanged;
+
+  StreamController<int>? _changeHub;
+  StreamSubscription<List<QueryRow>>? _changeSource;
+  var _changeNumber = 0;
+  int? _sharedChange;
+  Future<_LoadedLibrary>? _sharedLoad;
 
   Stream<HomeSnapshot> watchHome() => _watch(loadHome);
 
@@ -563,17 +575,24 @@ class LibraryRepository {
     );
   }
 
-  Future<int> countBooksInRoom(int roomId) async {
-    final loaded = await _load();
-    final cabinetIds = loaded.cabinets
-        .where((cabinet) => cabinet.roomId == roomId)
-        .map((cabinet) => cabinet.id)
-        .toSet();
-    final shelfIds = loaded.shelves
-        .where((shelf) => cabinetIds.contains(shelf.cabinetId))
-        .map((shelf) => shelf.id)
-        .toSet();
-    return loaded.books.where((book) => shelfIds.contains(book.shelfId)).length;
+  Future<int> countBooksInRoom(int roomId) {
+    return _countBooks(
+      'shelf_id IN (SELECT shelves.id FROM shelves '
+      'JOIN cabinets ON cabinets.id = shelves.cabinet_id '
+      'WHERE cabinets.room_id = ?)',
+      roomId,
+    );
+  }
+
+  Future<int> _countBooks(String where, int id) async {
+    final row = await db
+        .customSelect(
+          'SELECT COUNT(*) AS c FROM books WHERE $where',
+          variables: [Variable.withInt(id)],
+          readsFrom: {db.books, db.shelves, db.cabinets},
+        )
+        .getSingle();
+    return row.read<int>('c');
   }
 
   Future<void> deleteRoom(int id) async {
@@ -653,13 +672,11 @@ class LibraryRepository {
     );
   }
 
-  Future<int> countBooksInCabinet(int cabinetId) async {
-    final loaded = await _load();
-    final shelfIds = loaded.shelves
-        .where((shelf) => shelf.cabinetId == cabinetId)
-        .map((shelf) => shelf.id)
-        .toSet();
-    return loaded.books.where((book) => shelfIds.contains(book.shelfId)).length;
+  Future<int> countBooksInCabinet(int cabinetId) {
+    return _countBooks(
+      'shelf_id IN (SELECT id FROM shelves WHERE cabinet_id = ?)',
+      cabinetId,
+    );
   }
 
   Future<void> deleteCabinet(int id) async {
@@ -748,9 +765,8 @@ class LibraryRepository {
     );
   }
 
-  Future<int> countBooksOnShelf(int shelfId) async {
-    final loaded = await _load();
-    return loaded.books.where((book) => book.shelfId == shelfId).length;
+  Future<int> countBooksOnShelf(int shelfId) {
+    return _countBooks('shelf_id = ?', shelfId);
   }
 
   Future<void> deleteShelf(int shelfId) async {
@@ -799,9 +815,8 @@ class LibraryRepository {
     });
   }
 
-  Future<int> countBooksOnRow(int rowId) async {
-    final loaded = await _load();
-    return loaded.books.where((book) => book.rowId == rowId).length;
+  Future<int> countBooksOnRow(int rowId) {
+    return _countBooks('row_id = ?', rowId);
   }
 
   Future<void> deleteRow(int rowId) async {
@@ -1033,7 +1048,35 @@ class LibraryRepository {
     BookDraft draft, {
     int? excludeId,
   }) async {
-    final loaded = await _load();
+    final existing = _duplicateCandidates(await _load());
+    return _duplicatesOf(draft, existing, excludeId: excludeId);
+  }
+
+  Future<List<List<DuplicateMatch>>> findDuplicatesFor(
+    List<BookDraft> drafts,
+  ) async {
+    final existing = _duplicateCandidates(await _load());
+    return [for (final draft in drafts) _duplicatesOf(draft, existing)];
+  }
+
+  List<DuplicateCandidate> _duplicateCandidates(_LoadedLibrary loaded) {
+    return [
+      for (final book in loaded.books)
+        DuplicateCandidate(
+          id: book.id,
+          title: book.title,
+          isbn: book.isbn ?? '',
+          authors: loaded.authors[book.id] ?? const [],
+          locationPath: loaded.summary(book).locationPath,
+        ),
+    ];
+  }
+
+  List<DuplicateMatch> _duplicatesOf(
+    BookDraft draft,
+    List<DuplicateCandidate> existing, {
+    int? excludeId,
+  }) {
     return findDuplicateCopies(
       candidate: DuplicateCandidate(
         id: excludeId,
@@ -1042,16 +1085,7 @@ class LibraryRepository {
         authors: draft.authors,
         locationPath: '',
       ),
-      existing: [
-        for (final book in loaded.books)
-          DuplicateCandidate(
-            id: book.id,
-            title: book.title,
-            isbn: book.isbn ?? '',
-            authors: loaded.authors[book.id] ?? const [],
-            locationPath: loaded.summary(book).locationPath,
-          ),
-      ],
+      existing: existing,
     );
   }
 
@@ -1069,6 +1103,9 @@ class LibraryRepository {
     if (existing == null) {
       throw StateError('Книга не найдена');
     }
+    if (existing.format == BookFormat.audio) {
+      throw ArgumentError(audioOffShelfMessage);
+    }
     await db.transaction(() async {
       final place = await _resolveLocation(shelfId, rowId);
       await _rejectFilledShelf(
@@ -1084,9 +1121,13 @@ class LibraryRepository {
           shelfId: Value(place.shelfId),
           rowId: Value(place.rowId),
           positionIndex: Value(position),
+          placement: const Value('shelf'),
+          libraryDueAt: const Value(null),
+          reminderSentForDue: const Value(null),
         ),
       );
     });
+    afterBooksChanged?.call();
   }
 
   /// Moves every book in [ids] to one place, in that order.
@@ -1107,6 +1148,9 @@ class LibraryRepository {
       final books = <Book>[];
       for (final id in ids) {
         final book = await _requireBook(id);
+        if (bookFormatFromStorage(book.bookFormat) == BookFormat.audio) {
+          throw ArgumentError(audioOffShelfMessage);
+        }
         await _rejectFilledShelf(
           shelfId: place.shelfId,
           currentShelfId: book.shelfId,
@@ -1115,9 +1159,6 @@ class LibraryRepository {
       }
       var next = await _nextPosition(place.rowId);
       for (final book in books) {
-        if (bookFormatFromStorage(book.bookFormat) == BookFormat.audio) {
-          continue;
-        }
         final keepsPlace = place.rowId != null && place.rowId == book.rowId;
         final position = keepsPlace ? book.positionIndex : next++;
         await (db.update(db.books)..where((row) => row.id.equals(book.id))).write(
@@ -1225,12 +1266,10 @@ class LibraryRepository {
       return;
     }
     await db.transaction(() async {
+      final current = await _hashtagsByBook(keys: false);
       for (final id in ids) {
-        final existing = await bookDetails(id);
-        if (existing == null) {
-          throw StateError('Книга не найдена');
-        }
-        await _setHashtags(id, [...existing.hashtags, ...hashtags]);
+        await _requireBook(id);
+        await _setHashtags(id, [...?current[id], ...hashtags]);
       }
     });
   }
@@ -1618,52 +1657,100 @@ class LibraryRepository {
     return trimmed;
   }
 
+  /// One database listener for every open screen. Each change gets a number,
+  /// and screens reloading for the same number share one [_load].
+  Stream<int> get _changes {
+    final existing = _changeHub;
+    if (existing != null) {
+      return existing.stream;
+    }
+    final hub = StreamController<int>.broadcast();
+    hub.onListen = () {
+      var first = true;
+      _changeSource = db
+          .customSelect(
+            'SELECT 1 AS ping',
+            readsFrom: {
+              db.rooms,
+              db.cabinets,
+              db.shelves,
+              db.shelfRows,
+              db.books,
+              db.bookPhotos,
+              db.authors,
+              db.genres,
+              db.publishers,
+              db.hashtags,
+              db.bookAuthors,
+              db.bookGenres,
+              db.bookPublishers,
+              db.bookHashtags,
+              db.appSettings,
+            },
+          )
+          .watch()
+          .listen((_) {
+            if (first) {
+              first = false;
+              return;
+            }
+            hub.add(++_changeNumber);
+          });
+    };
+    hub.onCancel = () {
+      _changeSource?.cancel();
+      _changeSource = null;
+    };
+    _changeHub = hub;
+    return hub.stream;
+  }
+
   Stream<T> _watch<T>(Future<T> Function() load) {
-    var generation = 0;
-    late StreamSubscription<List<QueryRow>> subscription;
-    final controller = StreamController<T>();
-    subscription = db
-        .customSelect(
-          'SELECT 1 AS ping',
-          readsFrom: {
-            db.rooms,
-            db.cabinets,
-            db.shelves,
-            db.shelfRows,
-            db.books,
-            db.bookPhotos,
-            db.authors,
-            db.genres,
-            db.publishers,
-            db.hashtags,
-            db.bookAuthors,
-            db.bookGenres,
-            db.bookPublishers,
-            db.bookHashtags,
-            db.appSettings,
-          },
-        )
-        .watch()
-        .listen((_) {
-          final ticket = ++generation;
-          load().then(
-            (value) {
-              if (ticket == generation && !controller.isClosed) {
-                controller.add(value);
-              }
-            },
-            onError: (Object error, StackTrace stack) {
-              if (ticket == generation && !controller.isClosed) {
-                controller.addError(error, stack);
-              }
-            },
-          );
-        });
-    controller.onCancel = () => subscription.cancel();
+    var ticket = 0;
+    StreamSubscription<int>? subscription;
+    late final StreamController<T> controller;
+    void run(int? change) {
+      final mine = ++ticket;
+      final future = change == null
+          ? load()
+          : runZoned(load, zoneValues: {_sharedLoadKey: change});
+      future.then(
+        (value) {
+          if (mine == ticket && !controller.isClosed) {
+            controller.add(value);
+          }
+        },
+        onError: (Object error, StackTrace stack) {
+          if (mine == ticket && !controller.isClosed) {
+            controller.addError(error, stack);
+          }
+        },
+      );
+    }
+
+    controller = StreamController<T>(
+      onListen: () {
+        subscription = _changes.listen(run);
+        run(null);
+      },
+      onCancel: () => subscription?.cancel(),
+    );
     return controller.stream;
   }
 
-  Future<_LoadedLibrary> _load() async {
+  Future<_LoadedLibrary> _load() {
+    final change = Zone.current[_sharedLoadKey];
+    if (change is! int) {
+      return _loadFresh();
+    }
+    if (_sharedChange != change || _sharedLoad == null) {
+      _sharedChange = change;
+      _sharedLoad = _loadFresh();
+    }
+    return _sharedLoad!;
+  }
+
+  Future<_LoadedLibrary> _loadFresh() async {
     final rooms = await (db.select(db.rooms)..orderBy([
       (table) => OrderingTerm(expression: table.sortOrder),
       (table) => OrderingTerm(expression: table.id),

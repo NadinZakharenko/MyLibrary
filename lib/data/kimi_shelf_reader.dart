@@ -30,7 +30,7 @@ class KimiShelfReader {
     }
     final Uint8List prepared;
     try {
-      prepared = downscaleJpeg(jpeg);
+      prepared = await downscaleJpegInBackground(jpeg);
     } on ShelfImageException catch (error) {
       await _record(error: error.message);
       throw MetadataLookupException(error.message);

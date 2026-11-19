@@ -103,17 +103,7 @@ class BackupService {
         await output.writeAsBytes(file.content, flush: true);
       }
 
-      await _deleteIfExists(paths.databaseFile);
-      await _deleteIfExists(paths.databaseWalFile);
-      await _deleteIfExists(paths.databaseShmFile);
-      if (await paths.mediaDir.exists()) {
-        await paths.mediaDir.delete(recursive: true);
-      }
-      await paths.databaseFile.parent.create(recursive: true);
-      await stagedDatabase.rename(paths.databaseFile.path);
-      if (await stagedMedia.exists()) {
-        await stagedMedia.rename(paths.mediaDir.path);
-      }
+      await _swap(paths, stagedDatabase, stagedMedia);
     } finally {
       if (await staging.exists()) {
         await staging.delete(recursive: true);
@@ -231,5 +221,64 @@ class BackupService {
     if (await file.exists()) {
       await file.delete();
     }
+  }
+
+  /// The old library is moved aside first and deleted only after the new
+  /// files are in place, so a failed rename puts the old library back.
+  Future<void> _swap(
+    LibraryPaths paths,
+    File stagedDatabase,
+    Directory stagedMedia,
+  ) async {
+    final previous = Directory(
+      p.join(
+        paths.root.path,
+        'restore-previous-${DateTime.now().millisecondsSinceEpoch}',
+      ),
+    );
+    await previous.create(recursive: true);
+    final aside = <({FileSystemEntity entity, String home})>[];
+    final placed = <FileSystemEntity>[];
+    try {
+      for (final file in [
+        paths.databaseFile,
+        paths.databaseWalFile,
+        paths.databaseShmFile,
+      ]) {
+        if (await file.exists()) {
+          final moved = await file.rename(
+            p.join(previous.path, p.basename(file.path)),
+          );
+          aside.add((entity: moved, home: file.path));
+        }
+      }
+      if (await paths.mediaDir.exists()) {
+        final moved = await paths.mediaDir.rename(
+          p.join(previous.path, 'media'),
+        );
+        aside.add((entity: moved, home: paths.mediaDir.path));
+      }
+      placed.add(await stagedDatabase.rename(paths.databaseFile.path));
+      if (await stagedMedia.exists()) {
+        placed.add(await stagedMedia.rename(paths.mediaDir.path));
+      }
+    } catch (_) {
+      for (final entity in placed) {
+        try {
+          await entity.delete(recursive: true);
+        } catch (_) {}
+      }
+      for (final item in aside.reversed) {
+        try {
+          await item.entity.rename(item.home);
+        } catch (_) {}
+      }
+      throw BackupException(
+        'Не удалось заменить библиотеку. Прежние книги и фото оставлены.',
+      );
+    }
+    try {
+      await previous.delete(recursive: true);
+    } catch (_) {}
   }
 }

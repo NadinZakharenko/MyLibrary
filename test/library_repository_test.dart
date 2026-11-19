@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:io';
 
 import 'package:archive/archive.dart';
@@ -5,6 +6,7 @@ import 'package:drift/drift.dart' hide isNull, isNotNull;
 import 'package:drift/native.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:my_library/core/database/app_database.dart';
+import 'package:my_library/core/models/book_copy.dart';
 import 'package:my_library/core/models/book_draft.dart';
 import 'package:my_library/core/models/shelf_model.dart';
 import 'package:my_library/core/models/dictionary_kind.dart';
@@ -327,6 +329,35 @@ void main() {
     expect(await restoredRepo.yandexFolderId(), 'b1glocalfolder');
   });
 
+  test('findDuplicatesFor checks a whole list of drafts', () async {
+    await repo.createBook(
+      const BookDraft(
+        title: 'Мастер и Маргарита',
+        authors: ['Булгаков'],
+        isbn: '9780306406157',
+      ),
+    );
+    await repo.createBook(const BookDraft(title: 'Без автора'));
+
+    final results = await repo.findDuplicatesFor(const [
+      BookDraft(title: 'Иное', isbn: '978-0-306-40615-7'),
+      BookDraft(title: 'мастер и маргарита', authors: ['булгаков']),
+      BookDraft(title: 'Мастер и Маргарита'),
+      BookDraft(title: 'Без автора', authors: ['Кто-то']),
+      BookDraft(title: 'Мастер и Маргарита', authors: ['Иванов']),
+      BookDraft(title: 'Новая книга'),
+    ]);
+
+    expect(results, hasLength(6));
+    expect(results[0].single.reason, DuplicateReason.isbn);
+    expect(results[1].single.reason, DuplicateReason.titleAndAuthors);
+    expect(results[2].single.reason, DuplicateReason.titleOnly);
+    expect(results[3].single.reason, DuplicateReason.titleOnly);
+    expect(results[4], isEmpty);
+    expect(results[5], isEmpty);
+    expect(await repo.findDuplicatesFor(const []), isEmpty);
+  });
+
   test('stores reading status, loan, series, theme, and row overflow', () async {
     final finished = DateTime(2026, 3, 1);
     final due = DateTime(2020, 1, 1);
@@ -602,6 +633,81 @@ void main() {
 
     await repo.moveBooks(ids: [kept], shelfId: shelf.id, rowId: rowId);
     expect((await repo.bookDetails(kept))!.rowId, rowId);
+  });
+
+  test('open screens see a new book and counts come from the database', () async {
+    final roomId = await repo.createRoom(name: 'Комната');
+    final cabinetId = await repo.createCabinet(
+      roomId: roomId,
+      name: 'Шкаф',
+      shelfCount: 1,
+      rowsPerShelf: 1,
+    );
+    final shelf = (await repo.cabinet(cabinetId))!.shelves.single;
+    final rowId = shelf.rows.single.id;
+    final home = StreamIterator(repo.watchHome());
+    final search = StreamIterator(repo.watchSearch());
+    addTearDown(home.cancel);
+    addTearDown(search.cancel);
+    expect(await home.moveNext(), isTrue);
+    expect(home.current.totalBooks, 0);
+    expect(await search.moveNext(), isTrue);
+    expect(search.current, isEmpty);
+
+    await repo.createBook(
+      BookDraft(title: 'Новая', shelfId: shelf.id, rowId: rowId),
+    );
+
+    expect(await home.moveNext(), isTrue);
+    expect(home.current.totalBooks, 1);
+    expect(await search.moveNext(), isTrue);
+    expect(search.current.single.title, 'Новая');
+    expect(await repo.countBooksInRoom(roomId), 1);
+    expect(await repo.countBooksInCabinet(cabinetId), 1);
+    expect(await repo.countBooksOnShelf(shelf.id), 1);
+    expect(await repo.countBooksOnRow(rowId), 1);
+  });
+
+  test('a moved library book goes home and an audiobook stays off the shelf', () async {
+    final roomId = await repo.createRoom(name: 'Комната');
+    final cabinetId = await repo.createCabinet(
+      roomId: roomId,
+      name: 'Шкаф',
+      shelfCount: 1,
+      rowsPerShelf: 1,
+    );
+    final shelf = (await repo.cabinet(cabinetId))!.shelves.single;
+    final rowId = shelf.rows.single.id;
+    final borrowed = await repo.createBook(
+      BookDraft(
+        title: 'Из библиотеки',
+        placement: BookPlacement.library,
+        libraryDueAt: DateTime.utc(2026, 12, 1),
+      ),
+    );
+    final audio = await repo.createBook(
+      const BookDraft(title: 'Слушаю', format: BookFormat.audio),
+    );
+    var changes = 0;
+    repo.afterBooksChanged = () => changes++;
+
+    await repo.moveBook(id: borrowed, shelfId: shelf.id, rowId: rowId);
+    final moved = (await repo.bookDetails(borrowed))!;
+    expect(moved.placement, BookPlacement.shelf);
+    expect(moved.libraryDueAt, isNull);
+    expect(moved.rowId, rowId);
+    expect(changes, 1);
+
+    await expectLater(
+      repo.moveBook(id: audio, shelfId: shelf.id, rowId: rowId),
+      throwsA(isA<ArgumentError>()),
+    );
+    await expectLater(
+      repo.moveBooks(ids: [borrowed, audio], shelfId: null, rowId: null),
+      throwsA(isA<ArgumentError>()),
+    );
+    expect((await repo.bookDetails(borrowed))!.rowId, rowId);
+    expect((await repo.bookDetails(audio))!.shelfId, isNull);
   });
 
   test('updates status and publishers for every selected book', () async {

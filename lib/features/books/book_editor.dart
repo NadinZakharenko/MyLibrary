@@ -82,6 +82,10 @@ class _BookEditorState extends ConsumerState<BookEditor> {
   var _chooseShelf = false;
   var _lookingUp = false;
   var _scanningIsbn = false;
+  var _leaving = false;
+  var _textChanged = false;
+  late final BookDraft _baseline;
+  late final List<(TextEditingController, String)> _initialTexts;
 
   @override
   void initState() {
@@ -89,6 +93,26 @@ class _BookEditorState extends ConsumerState<BookEditor> {
     _chooseShelf = _draft.shelfId != null;
     if (_draft.statusChangedAt == null) {
       _draft = _draft.copyWith(statusChangedAt: _today());
+    }
+    _baseline = _draft;
+    _initialTexts = [
+      for (final controller in [
+        _title,
+        _subtitle,
+        _description,
+        _note,
+        _isbn,
+        _sourceUrl,
+        _series,
+        _volume,
+        _loanPerson,
+        _narrator,
+        _duration,
+      ])
+        (controller, controller.text),
+    ];
+    for (final (controller, _) in _initialTexts) {
+      controller.addListener(_onTextChanged);
     }
     if (widget.lookupOnOpen) {
       WidgetsBinding.instance.addPostFrameCallback((_) {
@@ -126,6 +150,13 @@ class _BookEditorState extends ConsumerState<BookEditor> {
     super.dispose();
   }
 
+  void _onTextChanged() {
+    final changed = _initialTexts.any((entry) => entry.$1.text != entry.$2);
+    if (changed != _textChanged && mounted) {
+      setState(() => _textChanged = changed);
+    }
+  }
+
   DateTime _today() {
     final now = DateTime.now();
     return DateTime(now.year, now.month, now.day);
@@ -154,8 +185,9 @@ class _BookEditorState extends ConsumerState<BookEditor> {
       initialDate: initial,
       firstDate: DateTime(1970),
       lastDate: DateTime(DateTime.now().year + 20),
+      locale: const Locale('ru'),
     );
-    if (picked == null) {
+    if (picked == null || !mounted) {
       return;
     }
     setState(() {
@@ -503,7 +535,7 @@ class _BookEditorState extends ConsumerState<BookEditor> {
         ? 'ISBN не прошёл проверку, но его можно сохранить'
         : null;
     final options = ref.watch(locationOptionsProvider);
-    return Scaffold(
+    return _guardUnsaved(Scaffold(
       appBar: AppBar(
         title: Text(widget.heading),
         actions: [
@@ -919,6 +951,30 @@ class _BookEditorState extends ConsumerState<BookEditor> {
           ],
         ],
       ),
+    ));
+  }
+
+  Widget _guardUnsaved(Widget page) {
+    final changed = _textChanged || !identical(_draft, _baseline);
+    return PopScope(
+      canPop: !changed || _saving || _leaving,
+      onPopInvokedWithResult: (didPop, _) async {
+        if (didPop) {
+          return;
+        }
+        final leave = await confirmDialog(
+          context,
+          title: 'Выйти без сохранения?',
+          message: 'Изменения в карточке не сохранены.',
+          confirmLabel: 'Выйти',
+        );
+        if (!leave || !mounted) {
+          return;
+        }
+        setState(() => _leaving = true);
+        Navigator.of(context).pop();
+      },
+      child: page,
     );
   }
 }

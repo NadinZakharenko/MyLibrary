@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
-import 'package:go_router/go_router.dart';
 import 'package:my_library/core/models/library_view.dart';
+import 'package:my_library/ui/open_book.dart';
 
 const _spineColors = <Color>[
   Color(0xFF4E342E),
@@ -94,7 +94,7 @@ class SpinePlank extends StatelessWidget {
                           onSelected?.call(book.id);
                           return;
                         }
-                        context.push('/book/${book.id}');
+                        openBook(context, book.id);
                       },
                     ),
                   );

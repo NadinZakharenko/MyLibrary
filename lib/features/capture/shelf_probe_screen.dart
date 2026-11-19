@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:io';
 import 'dart:typed_data';
 
@@ -9,13 +10,15 @@ import 'package:my_library/core/metadata/shelf_reading.dart';
 import 'package:my_library/core/models/book_draft.dart';
 import 'package:my_library/core/models/metadata_candidate.dart';
 import 'package:my_library/core/models/shelf_model.dart';
+import 'package:my_library/core/search/duplicates.dart';
 import 'package:my_library/data/candidate_fill.dart';
+import 'package:my_library/data/shelf_session_store.dart';
+import 'package:my_library/features/capture/shelf_batch.dart';
 import 'package:my_library/features/capture/shelf_mark_screen.dart';
 import 'package:my_library/features/capture/spine_card_screen.dart';
 import 'package:my_library/providers/app_providers.dart';
 import 'package:my_library/ui/candidate_sheet.dart';
 import 'package:my_library/ui/common_widgets.dart';
-import 'package:my_library/ui/duplicate_prompt.dart';
 import 'package:my_library/ui/location_picker.dart';
 import 'package:my_library/ui/user_message.dart';
 
@@ -39,6 +42,12 @@ class _ShelfProbeScreenState extends ConsumerState<ShelfProbeScreen> {
   int? _rowId;
   List<RecognizedShelf> _shelves = const [];
   final _settled = <String, bool>{};
+  final _matches = <String, List<DuplicateMatch>>{};
+  final _duplicateSkips = <String>{};
+  DateTime? _createdAt;
+  var _stored = false;
+  Future<void> _writes = Future<void>.value();
+  var _matchGeneration = 0;
 
   bool get _modelReady {
     return switch (_choice) {
@@ -72,6 +81,7 @@ class _ShelfProbeScreenState extends ConsumerState<ShelfProbeScreen> {
     final kimiKey = await repository.kimiApiKey();
     final yandexKey = await repository.yandexApiKey();
     final folder = await repository.yandexFolderId();
+    final session = await _restoreSession();
     if (!mounted) {
       return;
     }
@@ -84,8 +94,132 @@ class _ShelfProbeScreenState extends ConsumerState<ShelfProbeScreen> {
           yandexKey.trim().isNotEmpty &&
           folder != null &&
           folder.trim().isNotEmpty;
+      if (session != null) {
+        _photoPath = session.photoPath;
+        _shelfId = session.shelfId;
+        _rowId = session.rowId;
+        _shelves = session.shelves;
+        _settled.addAll(session.settled);
+        _createdAt = session.createdAt;
+        _stored = true;
+      }
       _ready = true;
     });
+    if (session != null) {
+      await _refreshMatches();
+    }
+  }
+
+  Future<ShelfSession?> _restoreSession() async {
+    try {
+      final session = await ref.read(shelfSessionStoreProvider).load();
+      if (session == null) {
+        return null;
+      }
+      final options = await ref.read(locationOptionsProvider.future);
+      final placeExists = options.any(
+        (option) =>
+            option.shelfId == session.shelfId &&
+            option.rows.any((row) => row.id == session.rowId),
+      );
+      return placeExists ? session : session.copyWith(shelfId: null, rowId: null);
+    } catch (_) {
+      await ref.read(appLogProvider).write('Не удалось открыть прежний снимок полки');
+      return null;
+    }
+  }
+
+  /// Writes are chained so an older snapshot never overwrites a newer one.
+  Future<ShelfSession?> _persist() {
+    final store = ref.read(shelfSessionStoreProvider);
+    final log = ref.read(appLogProvider);
+    final container = ProviderScope.containerOf(context, listen: false);
+    final photo = _photoPath;
+    final keep = _shelves.isNotEmpty && _hasPending;
+    final session = ShelfSession(
+      shelfId: _shelfId,
+      rowId: _rowId,
+      photoPath: photo ?? '',
+      shelves: _shelves,
+      settled: Map.of(_settled),
+      createdAt: _createdAt ??= DateTime.now(),
+    );
+    _stored = keep;
+    final result = _writes.then((_) async {
+      try {
+        if (!keep) {
+          await store.clear();
+          return null;
+        }
+        return await store.save(session, sourcePhoto: photo);
+      } catch (_) {
+        await log.write('Не удалось записать снимок полки');
+        return null;
+      } finally {
+        container.invalidate(shelfSessionProvider);
+      }
+    });
+    _writes = result.then((_) {});
+    return result;
+  }
+
+  Future<void> _forget() async {
+    setState(() {
+      _shelves = const [];
+      _settled.clear();
+      _matches.clear();
+      _duplicateSkips.clear();
+      _photoPath = null;
+      _createdAt = null;
+      _error = '';
+    });
+    await _persist();
+  }
+
+  Future<void> _confirmForget() async {
+    final confirmed = await confirmDialog(
+      context,
+      title: 'Забыть снимок?',
+      message:
+          'Несохранённые книги с этого снимка будут забыты. Уже сохранённые останутся в библиотеке.',
+      confirmLabel: 'Забыть',
+    );
+    if (confirmed && mounted) {
+      await _forget();
+    }
+  }
+
+  Future<void> _refreshMatches() async {
+    final generation = ++_matchGeneration;
+    final shelves = _shelves;
+    final slots = <String>[];
+    final drafts = <BookDraft>[];
+    for (var shelf = 0; shelf < shelves.length; shelf++) {
+      for (var index = 0; index < shelves[shelf].books.length; index++) {
+        slots.add(_slot(shelf, index));
+        drafts.add(_draftFor(shelves[shelf].books[index]));
+      }
+    }
+    try {
+      final found = await ref
+          .read(libraryRepositoryProvider)
+          .findDuplicatesFor(drafts);
+      if (!mounted || generation != _matchGeneration) {
+        return;
+      }
+      setState(() {
+        _matches.clear();
+        for (var i = 0; i < slots.length; i++) {
+          if (found[i].isNotEmpty) {
+            _matches[slots[i]] = found[i];
+          }
+        }
+      });
+    } catch (_) {
+      if (mounted) {
+        await ref.read(appLogProvider).write('Не удалось проверить дубли полки');
+      }
+    }
   }
 
   Future<void> _allow() async {
@@ -161,9 +295,26 @@ class _ShelfProbeScreenState extends ConsumerState<ShelfProbeScreen> {
     if (!_placeReady) {
       return;
     }
+    if (_stored) {
+      final confirmed = await confirmDialog(
+        context,
+        title: 'Начать новую полку?',
+        message: 'Несохранённые книги с прошлого снимка будут забыты.',
+        confirmLabel: 'Начать',
+      );
+      if (!confirmed || !mounted) {
+        return;
+      }
+    }
     final path = await _pickImage();
     if (path == null || !mounted) {
       return;
+    }
+    if (_stored) {
+      await _forget();
+      if (!mounted) {
+        return;
+      }
     }
     _photoPath = path;
     try {
@@ -211,8 +362,18 @@ class _ShelfProbeScreenState extends ConsumerState<ShelfProbeScreen> {
         _busy = false;
         _shelves = shelves;
         _settled.clear();
+        _matches.clear();
+        _duplicateSkips.clear();
+        _createdAt = DateTime.now();
         _error = empty ? 'На фото не удалось прочитать корешки.' : '';
       });
+      final stored = await _persist();
+      if (stored != null && mounted) {
+        setState(() => _photoPath = stored.photoPath);
+      }
+      if (mounted) {
+        await _refreshMatches();
+      }
     } catch (error) {
       if (!mounted) {
         return;
@@ -297,6 +458,10 @@ class _ShelfProbeScreenState extends ConsumerState<ShelfProbeScreen> {
       return;
     }
     setState(() => _settled[_slot(shelf, index)] = result);
+    unawaited(_persist());
+    if (result) {
+      await _refreshMatches();
+    }
   }
 
   Future<void> _saveAll() async {
@@ -304,46 +469,54 @@ class _ShelfProbeScreenState extends ConsumerState<ShelfProbeScreen> {
     if (place == null || !mounted) {
       return;
     }
-    var saved = 0;
-    var skipped = 0;
+    final tally = BatchTally();
     for (var shelf = 0; shelf < _shelves.length; shelf++) {
       final books = _shelves[shelf].books;
       for (var index = 0; index < books.length; index++) {
         if (!mounted) {
           return;
         }
-        if (_settled.containsKey(_slot(shelf, index))) {
+        final slot = _slot(shelf, index);
+        if (_settled.containsKey(slot)) {
           continue;
         }
-        final spine = books[index];
-        final kept = await _saveBatchSpine(spine, place);
-        if (!mounted) {
+        final outcome = await _saveBatchSpine(books[index], slot, place);
+        if (!mounted || outcome == null) {
           return;
         }
-        if (kept == null) {
-          return;
-        }
-        setState(() => _settled[_slot(shelf, index)] = kept);
-        if (kept) {
-          saved += 1;
-        } else {
-          skipped += 1;
+        setState(() {
+          _settled[slot] = spineSettledValue(outcome);
+          if (outcome == SpineOutcome.duplicate) {
+            _duplicateSkips.add(slot);
+          }
+        });
+        unawaited(_persist());
+        tally.add(outcome);
+        if (outcome == SpineOutcome.saved) {
+          await _refreshMatches();
         }
       }
     }
     if (mounted) {
-      showMessage(context, 'Сохранено $saved, пропущено $skipped.');
+      showMessage(context, tally.message);
     }
   }
 
-  Future<bool?> _saveBatchSpine(RecognizedSpine spine, ShelfPlace place) async {
+  Future<SpineOutcome?> _saveBatchSpine(
+    RecognizedSpine spine,
+    String slot,
+    ShelfPlace place,
+  ) async {
     if (spine.uncertain || spine.title.trim().isEmpty) {
       final result = await _openCard(
         spine,
         shelfId: place.shelfId,
         rowId: place.rowId,
       );
-      return result ?? false;
+      return result == true ? SpineOutcome.saved : SpineOutcome.skipped;
+    }
+    if (_matches[slot]?.isNotEmpty ?? false) {
+      return SpineOutcome.duplicate;
     }
     setState(() => _busy = true);
     List<MetadataCandidate> results = const [];
@@ -376,7 +549,7 @@ class _ShelfProbeScreenState extends ConsumerState<ShelfProbeScreen> {
         return null;
       }
       if (chosen == null) {
-        return false;
+        return SpineOutcome.skipped;
       }
       return _storeCandidate(seed, chosen, place);
     }
@@ -386,7 +559,7 @@ class _ShelfProbeScreenState extends ConsumerState<ShelfProbeScreen> {
     return _storeDraft(seed);
   }
 
-  Future<bool> _storeCandidate(
+  Future<SpineOutcome> _storeCandidate(
     BookDraft seed,
     MetadataCandidate candidate,
     ShelfPlace place,
@@ -400,7 +573,7 @@ class _ShelfProbeScreenState extends ConsumerState<ShelfProbeScreen> {
         images: ref.read(imageStoreProvider),
       );
       if (!mounted) {
-        return false;
+        return SpineOutcome.skipped;
       }
       return await _storeDraft(
         filled.copyWith(shelfId: place.shelfId, rowId: place.rowId),
@@ -410,33 +583,32 @@ class _ShelfProbeScreenState extends ConsumerState<ShelfProbeScreen> {
         setState(() => _busy = false);
         showMessage(context, userFacingError(error));
       }
-      return false;
+      return SpineOutcome.skipped;
     }
   }
 
-  Future<bool> _storeDraft(BookDraft draft) async {
-    if (mounted) {
-      setState(() => _busy = false);
-    }
+  /// Batch-only: a duplicate is skipped silently, without the dialog.
+  Future<SpineOutcome> _storeDraft(BookDraft draft) async {
     if (draft.title.trim().isEmpty || !mounted) {
-      return false;
-    }
-    final allowed = await confirmDuplicates(context, ref, [draft]);
-    if (!allowed || !mounted) {
-      return false;
+      return SpineOutcome.skipped;
     }
     setState(() => _busy = true);
     try {
-      final id = await ref.read(libraryRepositoryProvider).createBook(draft);
+      final repository = ref.read(libraryRepositoryProvider);
+      final matches = await repository.findDuplicates(draft);
+      if (matches.isNotEmpty) {
+        return SpineOutcome.duplicate;
+      }
+      final id = await repository.createBook(draft);
       await ref
           .read(appLogProvider)
           .write('Книга сохранена', '«${draft.title}», id $id');
-      return true;
+      return SpineOutcome.saved;
     } catch (error) {
       if (mounted) {
         showMessage(context, userFacingError(error));
       }
-      return false;
+      return SpineOutcome.skipped;
     } finally {
       if (mounted) {
         setState(() => _busy = false);
@@ -449,7 +621,21 @@ class _ShelfProbeScreenState extends ConsumerState<ShelfProbeScreen> {
     final failed = _error.isNotEmpty;
     final canCapture = !_busy && _placeReady;
     return Scaffold(
-      appBar: AppBar(title: const Text('Полка целиком')),
+      appBar: AppBar(
+        title: const Text('Полка целиком'),
+        actions: [
+          if (_stored)
+            PopupMenuButton<void>(
+              enabled: !_busy,
+              itemBuilder: (context) => [
+                PopupMenuItem<void>(
+                  onTap: _confirmForget,
+                  child: const Text('Забыть снимок'),
+                ),
+              ],
+            ),
+        ],
+      ),
       body: !_ready
           ? const Center(child: CircularProgressIndicator())
           : Stack(
@@ -529,6 +715,11 @@ class _ShelfProbeScreenState extends ConsumerState<ShelfProbeScreen> {
                             index: index,
                             spine: _shelves[shelf].books[index],
                             settled: _settled[_slot(shelf, index)],
+                            matches:
+                                _matches[_slot(shelf, index)] ?? const [],
+                            duplicateSkip: _duplicateSkips.contains(
+                              _slot(shelf, index),
+                            ),
                             onSave: canCapture
                                 ? () => _openOne(shelf, index)
                                 : null,
@@ -567,6 +758,9 @@ class _ShelfProbeScreenState extends ConsumerState<ShelfProbeScreen> {
             _shelfId = shelfId;
             _rowId = rowId;
           });
+          if (_stored) {
+            unawaited(_persist());
+          }
         },
       ),
     );
@@ -588,12 +782,16 @@ class _SpineTile extends StatelessWidget {
     required this.index,
     required this.spine,
     required this.settled,
+    required this.matches,
+    required this.duplicateSkip,
     required this.onSave,
   });
 
   final int index;
   final RecognizedSpine spine;
   final bool? settled;
+  final List<DuplicateMatch> matches;
+  final bool duplicateSkip;
   final VoidCallback? onSave;
 
   @override
@@ -602,7 +800,10 @@ class _SpineTile extends StatelessWidget {
     final title = spine.title.isEmpty ? 'Без названия' : spine.title;
     final note = switch (settled) {
       true => 'Сохранено',
+      false when duplicateSkip => 'Пропущено: уже в библиотеке',
       false => 'Пропущено',
+      null when matches.isNotEmpty =>
+        'Уже в библиотеке: ${duplicateReasonLabel(matches.first.reason)}\n${matches.first.locationPath}',
       null when spine.uncertain => 'Чтение сомнительное',
       null => null,
     };

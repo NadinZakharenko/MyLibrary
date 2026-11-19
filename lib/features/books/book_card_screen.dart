@@ -10,6 +10,7 @@ import 'package:my_library/core/format/russian_plural.dart';
 import 'package:my_library/core/format/series_label.dart';
 import 'package:my_library/core/models/book_draft.dart';
 import 'package:my_library/core/models/library_view.dart';
+import 'package:my_library/data/library_repository.dart';
 import 'package:my_library/features/books/book_catalog_actions.dart';
 import 'package:my_library/features/books/book_editor.dart';
 import 'package:my_library/features/books/book_note_field.dart';
@@ -49,7 +50,9 @@ class BookCardScreen extends ConsumerWidget {
             actions: [
               IconButton(
                 tooltip: 'Изменить',
-                onPressed: () => context.push('/book/${data.id}/edit'),
+                onPressed: () => context.push(
+                  '${GoRouterState.of(context).uri.path}/edit',
+                ),
                 icon: const Icon(Icons.edit_outlined),
               ),
               IconButton(
@@ -168,11 +171,13 @@ class BookCardScreen extends ConsumerWidget {
                   child: const Text('Книга возвращена'),
                 ),
               ],
-              const SizedBox(height: 8),
-              OutlinedButton(
-                onPressed: () => _move(context, ref, data),
-                child: const Text('Переместить'),
-              ),
+              if (data.format != BookFormat.audio) ...[
+                const SizedBox(height: 8),
+                OutlinedButton(
+                  onPressed: () => _move(context, ref, data),
+                  child: const Text('Переместить'),
+                ),
+              ],
               const SizedBox(height: 16),
               Text('Описание', style: theme.textTheme.titleMedium),
               const SizedBox(height: 8),
@@ -447,6 +452,7 @@ class _BookNoteEditorState extends ConsumerState<_BookNoteEditor> {
   var _saving = false;
   var _dirty = false;
   var _applying = false;
+  LibraryRepository? _repository;
 
   @override
   void initState() {
@@ -470,12 +476,19 @@ class _BookNoteEditorState extends ConsumerState<_BookNoteEditor> {
 
   @override
   void dispose() {
+    final text = _note.text;
+    if (_dirty && !_saving && text.trim() != widget.book.personalNote.trim()) {
+      _repository
+          ?.updatePersonalNote(widget.book.id, text)
+          .catchError((Object _) {});
+    }
     _note.dispose();
     super.dispose();
   }
 
   @override
   Widget build(BuildContext context) {
+    _repository = ref.watch(libraryRepositoryProvider);
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [

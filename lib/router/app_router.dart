@@ -16,159 +16,142 @@ import 'package:my_library/features/settings/settings_screen.dart';
 import 'package:my_library/features/shell/app_shell.dart';
 
 final routerProvider = Provider<GoRouter>((ref) {
+  final rootNavigatorKey = GlobalKey<NavigatorState>(debugLabel: 'root');
   final router = GoRouter(
+    navigatorKey: rootNavigatorKey,
     initialLocation: '/home',
     routes: [
-      ShellRoute(
-        builder: (context, state, child) {
-          return AppShell(
-            location: state.uri.path,
-            navigationShell: libraryNavigationShell,
-            child: child,
-          );
+      StatefulShellRoute.indexedStack(
+        builder: (context, state, navigationShell) {
+          return AppShell(navigationShell: navigationShell);
         },
-        routes: [
-          StatefulShellRoute.indexedStack(
-            builder: (context, state, navigationShell) {
-              libraryNavigationShell = navigationShell;
-              return navigationShell;
-            },
-            branches: [
-              StatefulShellBranch(
+        branches: [
+          StatefulShellBranch(
+            routes: [
+              GoRoute(
+                path: '/home',
+                builder: (context, state) => const HomeScreen(),
                 routes: [
+                  ..._bookRoutes(),
                   GoRoute(
-                    path: '/home',
-                    builder: (context, state) => const HomeScreen(),
-                    routes: [
-                      GoRoute(
-                        path: 'unplaced',
-                        builder: (context, state) =>
-                            const UnplacedBooksScreen(),
-                      ),
-                      GoRoute(
-                        path: 'group/:stat',
-                        builder: (context, state) {
-                          final stat = _homeStat(state.pathParameters['stat']);
-                          if (stat == null) {
-                            return const Scaffold(
-                              body: Center(child: Text('Некорректная ссылка')),
-                            );
-                          }
-                          return HomeGroupScreen(stat: stat);
-                        },
-                      ),
-                      GoRoute(
-                        path: 'cabinet/:cabinetId',
-                        builder: (context, state) => _idPage(
-                          state,
-                          'cabinetId',
-                          (id) => CabinetScreen(
-                            cabinetId: id,
-                            highlightedShelfId: int.tryParse(
-                              state.uri.queryParameters['shelf'] ?? '',
-                            ),
-                          ),
+                    path: 'unplaced',
+                    builder: (context, state) => const UnplacedBooksScreen(),
+                  ),
+                  GoRoute(
+                    path: 'group/:stat',
+                    builder: (context, state) {
+                      final stat = _homeStat(state.pathParameters['stat']);
+                      if (stat == null) {
+                        return const Scaffold(
+                          body: Center(child: Text('Некорректная ссылка')),
+                        );
+                      }
+                      return HomeGroupScreen(stat: stat);
+                    },
+                  ),
+                  GoRoute(
+                    path: 'cabinet/:cabinetId',
+                    builder: (context, state) => _idPage(
+                      state,
+                      'cabinetId',
+                      (id) => CabinetScreen(
+                        cabinetId: id,
+                        highlightedShelfId: int.tryParse(
+                          state.uri.queryParameters['shelf'] ?? '',
                         ),
                       ),
-                      GoRoute(
-                        path: 'shelf/:shelfId',
-                        builder: (context, state) => _idPage(
-                          state,
-                          'shelfId',
-                          (id) => ShelfScreen(shelfId: id),
-                        ),
-                      ),
-                      GoRoute(
-                        path: 'row/:rowId',
-                        builder: (context, state) => _idPage(
-                          state,
-                          'rowId',
-                          (id) => RowBooksScreen(rowId: id),
-                        ),
-                      ),
-                    ],
+                    ),
                   ),
-                ],
-              ),
-              StatefulShellBranch(
-                routes: [
                   GoRoute(
-                    path: '/search',
-                    builder: (context, state) => const SearchScreen(),
+                    path: 'shelf/:shelfId',
+                    builder: (context, state) => _idPage(
+                      state,
+                      'shelfId',
+                      (id) => ShelfScreen(shelfId: id),
+                    ),
                   ),
-                ],
-              ),
-              StatefulShellBranch(
-                routes: [
                   GoRoute(
-                    path: '/add',
-                    builder: (context, state) => const AddBookScreen(),
-                    routes: [
-                      GoRoute(
-                        path: 'manual',
-                        builder: (context, state) => const ManualLookupScreen(),
-                      ),
-                      GoRoute(
-                        path: 'shelf',
-                        builder: (context, state) => const ShelfProbeScreen(),
-                        routes: [
-                          GoRoute(
-                            path: 'mark',
-                            builder: (context, state) {
-                              final extra = state.extra;
-                              if (extra is! ShelfMarkArgs ||
-                                  extra.path.isEmpty) {
-                                return const Scaffold(
-                                  body: Center(child: Text('Нет снимка полки')),
-                                );
-                              }
-                              return ShelfMarkScreen(
-                                imagePath: extra.path,
-                                shelfId: extra.shelfId,
-                                rowId: extra.rowId,
-                              );
-                            },
-                          ),
-                        ],
-                      ),
-                      GoRoute(
-                        path: 'candidates',
-                        builder: (context, state) => const CandidatesScreen(),
-                      ),
-                      GoRoute(
-                        path: 'form',
-                        builder: (context, state) => const DraftFormScreen(),
-                      ),
-                      GoRoute(
-                        path: 'batch',
-                        builder: (context, state) => const BatchDraftsScreen(),
-                      ),
-                    ],
-                  ),
-                ],
-              ),
-              StatefulShellBranch(
-                routes: [
-                  GoRoute(
-                    path: '/settings',
-                    builder: (context, state) => const SettingsScreen(),
+                    path: 'row/:rowId',
+                    builder: (context, state) => _idPage(
+                      state,
+                      'rowId',
+                      (id) => RowBooksScreen(rowId: id),
+                    ),
                   ),
                 ],
               ),
             ],
           ),
-          GoRoute(
-            path: '/book/:bookId',
-            builder: (context, state) =>
-                _idPage(state, 'bookId', (id) => BookCardScreen(bookId: id)),
+          StatefulShellBranch(
             routes: [
               GoRoute(
-                path: 'edit',
-                builder: (context, state) => _idPage(
-                  state,
-                  'bookId',
-                  (id) => EditBookScreen(bookId: id),
-                ),
+                path: '/search',
+                builder: (context, state) => const SearchScreen(),
+                routes: _bookRoutes(),
+              ),
+            ],
+          ),
+          StatefulShellBranch(
+            routes: [
+              GoRoute(
+                path: '/add',
+                builder: (context, state) => const AddBookScreen(),
+                routes: [
+                  ..._bookRoutes(),
+                  GoRoute(
+                    path: 'manual',
+                    parentNavigatorKey: rootNavigatorKey,
+                    builder: (context, state) => const ManualLookupScreen(),
+                  ),
+                  GoRoute(
+                    path: 'shelf',
+                    parentNavigatorKey: rootNavigatorKey,
+                    builder: (context, state) => const ShelfProbeScreen(),
+                    routes: [
+                      GoRoute(
+                        path: 'mark',
+                        parentNavigatorKey: rootNavigatorKey,
+                        builder: (context, state) {
+                          final extra = state.extra;
+                          if (extra is! ShelfMarkArgs || extra.path.isEmpty) {
+                            return const Scaffold(
+                              body: Center(child: Text('Нет снимка полки')),
+                            );
+                          }
+                          return ShelfMarkScreen(
+                            imagePath: extra.path,
+                            shelfId: extra.shelfId,
+                            rowId: extra.rowId,
+                          );
+                        },
+                      ),
+                    ],
+                  ),
+                  GoRoute(
+                    path: 'candidates',
+                    parentNavigatorKey: rootNavigatorKey,
+                    builder: (context, state) => const CandidatesScreen(),
+                  ),
+                  GoRoute(
+                    path: 'form',
+                    parentNavigatorKey: rootNavigatorKey,
+                    builder: (context, state) => const DraftFormScreen(),
+                  ),
+                  GoRoute(
+                    path: 'batch',
+                    parentNavigatorKey: rootNavigatorKey,
+                    builder: (context, state) => const BatchDraftsScreen(),
+                    routes: _bookRoutes(navigatorKey: rootNavigatorKey),
+                  ),
+                ],
+              ),
+            ],
+          ),
+          StatefulShellBranch(
+            routes: [
+              GoRoute(
+                path: '/settings',
+                builder: (context, state) => const SettingsScreen(),
               ),
             ],
           ),
@@ -186,6 +169,25 @@ final routerProvider = Provider<GoRouter>((ref) {
   ref.onDispose(router.dispose);
   return router;
 });
+
+List<RouteBase> _bookRoutes({GlobalKey<NavigatorState>? navigatorKey}) {
+  return [
+    GoRoute(
+      path: 'book/:bookId',
+      parentNavigatorKey: navigatorKey,
+      builder: (context, state) =>
+          _idPage(state, 'bookId', (id) => BookCardScreen(bookId: id)),
+      routes: [
+        GoRoute(
+          path: 'edit',
+          parentNavigatorKey: navigatorKey,
+          builder: (context, state) =>
+              _idPage(state, 'bookId', (id) => EditBookScreen(bookId: id)),
+        ),
+      ],
+    ),
+  ];
+}
 
 HomeStat? _homeStat(String? raw) {
   if (raw == null) {

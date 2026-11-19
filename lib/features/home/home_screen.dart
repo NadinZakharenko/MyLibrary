@@ -7,6 +7,7 @@ import 'package:my_library/core/models/library_view.dart';
 import 'package:my_library/features/library/structure_actions.dart';
 import 'package:my_library/providers/app_providers.dart';
 import 'package:my_library/ui/common_widgets.dart';
+import 'package:my_library/ui/open_book.dart';
 
 class HomeScreen extends ConsumerWidget {
   const HomeScreen({super.key});
@@ -285,7 +286,7 @@ class _RecentBlock extends StatelessWidget {
               itemBuilder: (context, index) {
                 final book = data.recent[index];
                 return InkWell(
-                  onTap: () => context.push('/book/${book.id}'),
+                  onTap: () => openBook(context, book.id),
                   borderRadius: BorderRadius.circular(12),
                   child: SizedBox(
                     width: 108,
@@ -342,7 +343,7 @@ class _OverdueBlock extends StatelessWidget {
                   book.locationPath,
                 ].join(' · '),
               ),
-              onTap: () => context.push('/book/${book.id}'),
+              onTap: () => openBook(context, book.id),
             ),
       ],
     );

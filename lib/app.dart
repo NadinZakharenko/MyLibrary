@@ -3,6 +3,7 @@ import 'package:flutter_localizations/flutter_localizations.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:my_library/core/theme/app_theme.dart';
 import 'package:my_library/core/theme/theme_choice.dart';
+import 'package:my_library/data/library_reminders.dart';
 import 'package:my_library/providers/app_providers.dart';
 import 'package:my_library/router/app_router.dart';
 
@@ -22,11 +23,30 @@ class _MyLibraryAppState extends ConsumerState<MyLibraryApp> {
       final log = ref.read(appLogProvider);
       log.enabled = enabled;
       await log.write('Приложение запущено');
-      final repository = ref.read(libraryRepositoryProvider);
-      final reminders = ref.read(libraryRemindersProvider);
-      repository.afterBooksChanged = reminders.sync;
-      await reminders.sync();
+      if (!mounted) {
+        return;
+      }
+      ref.listenManual<LibraryReminders>(
+        libraryRemindersProvider,
+        (_, reminders) => _connect(reminders),
+        fireImmediately: true,
+      );
+      final launched = await ref.read(libraryRemindersProvider).launchBookId();
+      if (launched != null && mounted) {
+        _openBook(launched);
+      }
     });
+  }
+
+  /// The repository is rebuilt after a restore, so the hook is set again.
+  void _connect(LibraryReminders reminders) {
+    reminders.onOpenBook = _openBook;
+    reminders.repository.afterBooksChanged = reminders.sync;
+    reminders.sync();
+  }
+
+  void _openBook(int id) {
+    ref.read(routerProvider).go('/home/book/$id');
   }
 
   @override

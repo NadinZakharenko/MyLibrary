@@ -10,6 +10,9 @@ import 'package:my_library/features/capture/capture_navigation.dart';
 import 'package:my_library/providers/app_providers.dart';
 import 'package:my_library/ui/common_widgets.dart';
 
+/// Matches the size a photo is reduced to before a model reads it.
+const double _photoMaxSide = 2048;
+
 class AddBookScreen extends ConsumerWidget {
   const AddBookScreen({super.key});
 
@@ -19,6 +22,8 @@ class AddBookScreen extends ConsumerWidget {
     final photos = shelfModelReadsPhotos(
       ref.watch(shelfModelChoiceProvider).asData?.value ?? ShelfModelChoice.off,
     );
+    final shelfSession = ref.watch(shelfSessionProvider).asData?.value;
+    final shelfPending = shelfSession?.pending ?? 0;
     return Scaffold(
       appBar: AppBar(
         title: const Text('Добавить книгу'),
@@ -71,8 +76,10 @@ class AddBookScreen extends ConsumerWidget {
                 _MethodCard(
                   icon: Icons.view_column_outlined,
                   title: 'Полка целиком',
-                  subtitle: 'Выбранная в настройках модель читает корешки.',
-                  onTap: () => context.push('/add/shelf'),
+                  subtitle: shelfPending > 0
+                      ? 'Не сохранено $shelfPending из ${shelfSession!.total} — нажмите, чтобы продолжить'
+                      : 'Выбранная в настройках модель читает корешки.',
+                  onTap: () => _shelf(context, ref),
                 ),
             ],
           ),
@@ -84,6 +91,13 @@ class AddBookScreen extends ConsumerWidget {
         ],
       ),
     );
+  }
+
+  Future<void> _shelf(BuildContext context, WidgetRef ref) async {
+    await context.push('/add/shelf');
+    if (context.mounted) {
+      ref.invalidate(shelfSessionProvider);
+    }
   }
 
   Future<void> _barcode(BuildContext context, WidgetRef ref) async {
@@ -133,7 +147,12 @@ class AddBookScreen extends ConsumerWidget {
       return;
     }
     try {
-      final file = await ImagePicker().pickImage(source: source, imageQuality: 85);
+      final file = await ImagePicker().pickImage(
+        source: source,
+        imageQuality: 85,
+        maxWidth: _photoMaxSide,
+        maxHeight: _photoMaxSide,
+      );
       if (file == null || !context.mounted) {
         return;
       }
@@ -153,7 +172,11 @@ class AddBookScreen extends ConsumerWidget {
 
   Future<void> _batch(BuildContext context, WidgetRef ref) async {
     try {
-      final files = await ImagePicker().pickMultiImage(imageQuality: 85);
+      final files = await ImagePicker().pickMultiImage(
+        imageQuality: 85,
+        maxWidth: _photoMaxSide,
+        maxHeight: _photoMaxSide,
+      );
       if (files.isEmpty || !context.mounted) {
         return;
       }

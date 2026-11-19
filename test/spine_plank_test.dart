@@ -7,9 +7,10 @@ import 'package:my_library/ui/spine_plank.dart';
 void main() {
   testWidgets('shows spine titles and opens the book on a short tap', (tester) async {
     final router = GoRouter(
+      initialLocation: '/home',
       routes: [
         GoRoute(
-          path: '/',
+          path: '/home',
           builder: (context, state) => Scaffold(
             body: SpinePlank(
               books: [
@@ -19,12 +20,14 @@ void main() {
               onReorder: (_) async {},
             ),
           ),
-        ),
-        GoRoute(
-          path: '/book/:id',
-          builder: (context, state) => Scaffold(
-            body: Text('opened ${state.pathParameters['id']}'),
-          ),
+          routes: [
+            GoRoute(
+              path: 'book/:id',
+              builder: (context, state) => Scaffold(
+                body: Text('opened ${state.pathParameters['id']}'),
+              ),
+            ),
+          ],
         ),
       ],
     );

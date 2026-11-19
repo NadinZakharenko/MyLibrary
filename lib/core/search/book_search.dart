@@ -69,6 +69,11 @@ class SearchFilter {
   final BookFormat? format;
 }
 
+final _spaces = RegExp(r'\s+');
+
+/// Search text per record; records are rebuilt when the library changes.
+final _haystacks = Expando<String>();
+
 /// Every non-empty query token must occur in title, subtitle, description,
 /// ISBN, series, author, genre, publisher, or hashtag. Room, cabinet, and
 /// hashtag filters are exact.
@@ -79,7 +84,7 @@ List<BookSearchRecord> filterBooks(
   final tokens = filter.query
       .trim()
       .toLowerCase()
-      .split(RegExp(r'\s+'))
+      .split(_spaces)
       .where((token) => token.isNotEmpty)
       .toList();
   final hashtagKey = filter.hashtag == null
@@ -117,7 +122,7 @@ bool _matches(
   if (tokens.isEmpty) {
     return true;
   }
-  final haystack = [
+  final haystack = _haystacks[book] ??= [
     book.title,
     book.subtitle,
     book.description,

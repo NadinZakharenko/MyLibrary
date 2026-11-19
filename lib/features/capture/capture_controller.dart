@@ -140,7 +140,14 @@ class CaptureController extends Notifier<CaptureState> {
       busy: true,
       error: null,
     );
-    final draft = await _draftFromImage(absolutePath);
+    final BookDraft draft;
+    try {
+      draft = await _draftFromImage(absolutePath);
+    } catch (error) {
+      state = state.copyWith(busy: false, error: userFacingError(error));
+      await _log('Ошибка фото', userFacingError(error));
+      return CaptureNext.rejected;
+    }
     state = state.copyWith(
       method: CaptureMethod.singlePhoto,
       drafts: [draft],
@@ -165,8 +172,16 @@ class CaptureController extends Notifier<CaptureState> {
       drafts: const [],
     );
     final drafts = <BookDraft>[];
-    for (final path in absolutePaths) {
-      drafts.add(await _draftFromImage(path));
+    try {
+      for (final path in absolutePaths) {
+        drafts.add(await _draftFromImage(path));
+      }
+    } catch (error) {
+      state = state.copyWith(busy: false, error: userFacingError(error));
+      await _log('Ошибка фото', userFacingError(error));
+      if (drafts.isEmpty) {
+        return CaptureNext.rejected;
+      }
     }
     state = state.copyWith(
       method: CaptureMethod.batchPhotos,
@@ -204,7 +219,12 @@ class CaptureController extends Notifier<CaptureState> {
       final id = await ref.read(libraryRepositoryProvider).createBook(draft);
       await _log('Книга сохранена', '«${draft.title}», id $id');
       final drafts = [...state.drafts];
-      drafts[index] = draft.copyWith(savedBookId: id, candidates: const []);
+      final slot = draft.localKey.isEmpty
+          ? (index < drafts.length ? index : -1)
+          : drafts.indexWhere((item) => item.localKey == draft.localKey);
+      if (slot >= 0) {
+        drafts[slot] = draft.copyWith(savedBookId: id, candidates: const []);
+      }
       state = state.copyWith(busy: false, drafts: drafts);
       return id;
     } catch (error) {

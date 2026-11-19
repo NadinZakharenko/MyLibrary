@@ -107,10 +107,13 @@ class CoverImage extends ConsumerWidget {
     Widget child = placeholder;
     if (path != null && path.isNotEmpty) {
       final file = ref.watch(imageStoreProvider).resolve(path);
-      if (file != null && file.existsSync()) {
+      if (file != null) {
+        final pixels = MediaQuery.devicePixelRatioOf(context);
+        final side = width > height ? width : height;
         child = Image.file(
           file,
           fit: BoxFit.cover,
+          cacheWidth: (side * pixels).round(),
           errorBuilder: (context, error, stackTrace) => placeholder,
         );
       }

@@ -19,7 +19,11 @@ class LibraryReminders {
   final MessengerBots bots;
   final FlutterLocalNotificationsPlugin notifications;
 
+  /// Opens the book when the user taps its reminder.
+  void Function(int bookId)? onOpenBook;
+
   var _ready = false;
+  Future<void> _syncing = Future.value();
 
   Future<void> ensureReady() async {
     if (_ready) {
@@ -33,24 +37,68 @@ class LibraryReminders {
       tz.setLocalLocation(tz.local);
     }
     const android = AndroidInitializationSettings('@mipmap/ic_launcher');
-    const settings = InitializationSettings(android: android);
-    await notifications.initialize(settings);
+    const darwin = DarwinInitializationSettings(
+      requestAlertPermission: false,
+      requestBadgePermission: false,
+      requestSoundPermission: false,
+    );
+    const settings = InitializationSettings(android: android, iOS: darwin);
+    await notifications.initialize(
+      settings,
+      onDidReceiveNotificationResponse: (response) {
+        final id = libraryReminderBookId(response);
+        if (id != null) {
+          onOpenBook?.call(id);
+        }
+      },
+    );
     _ready = true;
+  }
+
+  /// The book whose reminder started the app, if any.
+  Future<int?> launchBookId() async {
+    await ensureReady();
+    final details = await notifications.getNotificationAppLaunchDetails();
+    final response = details?.notificationResponse;
+    if (details?.didNotificationLaunchApp != true || response == null) {
+      return null;
+    }
+    return libraryReminderBookId(response);
   }
 
   Future<bool> requestPermission() async {
     await ensureReady();
     final android = notifications.resolvePlatformSpecificImplementation<
         AndroidFlutterLocalNotificationsPlugin>();
-    final allowed = await android?.requestNotificationsPermission();
+    final ios = notifications.resolvePlatformSpecificImplementation<
+        IOSFlutterLocalNotificationsPlugin>();
+    final allowed =
+        await android?.requestNotificationsPermission() ??
+        await ios?.requestPermissions(alert: true, badge: true, sound: true);
     await android?.requestExactAlarmsPermission();
     return allowed ?? true;
   }
 
-  Future<void> sync() async {
+  /// Runs one sync at a time; a failure goes to the log.
+  Future<void> sync() {
+    final next = _syncing.then((_) => _sync()).catchError((Object error) {
+      return log.writeAlways('Напоминание', journalDetail(error));
+    });
+    _syncing = next;
+    return next;
+  }
+
+  Future<void> _sync() async {
     await ensureReady();
     final enabled = await repository.libraryReminderEnabled();
     final rows = await repository.libraryReminderRows();
+    final current = {for (final book in rows) book.id};
+    final pending = await notifications.pendingNotificationRequests();
+    for (final request in pending) {
+      if (!current.contains(request.id)) {
+        await notifications.cancel(request.id);
+      }
+    }
     for (final book in rows) {
       await notifications.cancel(book.id);
       final due = book.libraryDueAt;
