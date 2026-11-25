@@ -8,7 +8,23 @@ import 'package:my_library/core/metadata/shelf_image.dart';
 import 'package:my_library/core/metadata/shelf_reading.dart';
 import 'package:my_library/data/metadata_service.dart';
 
-const kimiVisionModel = 'kimi-k2.6';
+const kimiVisionModel = 'kimi-k3.1-pro';
+
+/// K3 does not accept the K2 `thinking` switch. Low effort keeps shelf JSON short.
+Map<String, Object?> kimiChatBody({
+  required String model,
+  required Object content,
+  bool json = false,
+}) {
+  return {
+    'model': model,
+    'reasoning_effort': 'low',
+    if (json) 'response_format': {'type': 'json_object'},
+    'messages': [
+      {'role': 'user', 'content': content},
+    ],
+  };
+}
 
 class KimiShelfReader {
   KimiShelfReader({http.Client? client, this.log, this.model = kimiVisionModel})
@@ -43,25 +59,21 @@ class KimiShelfReader {
               'Authorization': 'Bearer $key',
               'Content-Type': 'application/json',
             },
-            body: jsonEncode({
-              'model': model,
-              'thinking': {'type': 'disabled'},
-              'response_format': {'type': 'json_object'},
-              'messages': [
-                {
-                  'role': 'user',
-                  'content': [
-                    {
-                      'type': 'image_url',
-                      'image_url': {
-                        'url': 'data:image/jpeg;base64,${base64Encode(prepared)}',
-                      },
+            body: jsonEncode(
+              kimiChatBody(
+                model: model,
+                json: true,
+                content: [
+                  {
+                    'type': 'image_url',
+                    'image_url': {
+                      'url': 'data:image/jpeg;base64,${base64Encode(prepared)}',
                     },
-                    {'type': 'text', 'text': shelfReadingPrompt},
-                  ],
-                },
-              ],
-            }),
+                  },
+                  {'type': 'text', 'text': shelfReadingPrompt},
+                ],
+              ),
+            ),
           )
           .timeout(_timeout);
       if (response.statusCode != 200) {
@@ -111,14 +123,9 @@ class KimiShelfReader {
               'Authorization': 'Bearer $key',
               'Content-Type': 'application/json',
             },
-            body: jsonEncode({
-              'model': model,
-              'thinking': {'type': 'disabled'},
-              'response_format': {'type': 'json_object'},
-              'messages': [
-                {'role': 'user', 'content': prompt},
-              ],
-            }),
+            body: jsonEncode(
+              kimiChatBody(model: model, json: true, content: prompt),
+            ),
           )
           .timeout(_timeout);
       if (response.statusCode != 200) {

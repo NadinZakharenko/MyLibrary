@@ -168,7 +168,11 @@ void main() {
       throwsA(isA<MetadataLookupException>()),
     );
 
-    expect(jsonDecode(body!)['temperature'], isNull);
+    final sent = jsonDecode(body!) as Map<String, Object?>;
+    expect(sent['temperature'], isNull);
+    expect(sent['thinking'], isNull);
+    expect(sent['model'], kimiVisionModel);
+    expect(sent['reasoning_effort'], 'low');
     expect(records.single.statusCode, 400);
     expect(records.single.error, contains('temperature must be 0.6'));
     expect(records.single.error!.contains(secret), isFalse);
@@ -180,11 +184,13 @@ void main() {
     const folder = 'b1gtestfolder';
     final records = <ModelCallRecord>[];
     Map<String, String>? headers;
+    String? body;
     final photo = Uint8List.fromList(
       img.encodeJpg(img.Image(width: 8, height: 8)),
     );
     final client = MockClient((request) async {
       headers = request.headers;
+      body = request.body;
       return http.Response(
         jsonEncode({'error': {'message': 'Forbidden $secret $folder'}}),
         403,
@@ -208,6 +214,9 @@ void main() {
       ),
     );
 
+    final sent = jsonDecode(body!) as Map<String, Object?>;
+    expect(sent['model'], 'gpt://$folder/$yandexVisionModelName/latest');
+    expect((sent['reasoning'] as Map)['effort'], 'none');
     expect(headers?['x-folder-id'], folder);
     expect(headers?['authorization'], 'Api-Key $secret');
     expect(records.single.error!.contains(secret), isFalse);

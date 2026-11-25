@@ -161,7 +161,7 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
           if (_shelfModel == ShelfModelChoice.yandex) ...[
             const SizedBox(height: 12),
             const Text(
-              'Нужны ключ API и идентификатор каталога Yandex Cloud. Снимок читает Gemma 3 27B.',
+              'Нужны ключ API и идентификатор каталога Yandex Cloud. Снимок читает Qwen3.6 35B, текст заметок — ЯндексGPT.',
             ),
             const SizedBox(height: 12),
             TextField(

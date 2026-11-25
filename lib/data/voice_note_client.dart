@@ -87,13 +87,9 @@ class VoiceNoteClient {
               'Authorization': 'Bearer $key',
               'Content-Type': 'application/json',
             },
-            body: jsonEncode({
-              'model': kimiVisionModel,
-              'thinking': {'type': 'disabled'},
-              'messages': [
-                {'role': 'user', 'content': prompt},
-              ],
-            }),
+            body: jsonEncode(
+              kimiChatBody(model: kimiVisionModel, content: prompt),
+            ),
           )
           .timeout(_timeout);
       return await _chatText(
@@ -136,25 +132,21 @@ class VoiceNoteClient {
               'Authorization': 'Bearer $key',
               'Content-Type': 'application/json',
             },
-            body: jsonEncode({
-              'model': kimiVisionModel,
-              'thinking': {'type': 'disabled'},
-              'messages': [
-                {
-                  'role': 'user',
-                  'content': [
-                    {
-                      'type': 'input_audio',
-                      'input_audio': {
-                        'data': base64Encode(audio),
-                        'format': format,
-                      },
+            body: jsonEncode(
+              kimiChatBody(
+                model: kimiVisionModel,
+                content: [
+                  {
+                    'type': 'input_audio',
+                    'input_audio': {
+                      'data': base64Encode(audio),
+                      'format': format,
                     },
-                    {'type': 'text', 'text': voiceTranscribePrompt},
-                  ],
-                },
-              ],
-            }),
+                  },
+                  {'type': 'text', 'text': voiceTranscribePrompt},
+                ],
+              ),
+            ),
           )
           .timeout(_timeout);
       return await _chatText(
@@ -182,7 +174,7 @@ class VoiceNoteClient {
   }) async {
     final key = apiKey.trim();
     final folder = folderId.trim();
-    await _requireYandex(key, folder, '$yandexVisionModelName · текст');
+    await _requireYandex(key, folder, '$yandexTextModelName · текст');
     try {
       final response = await _client
           .post(
@@ -193,7 +185,7 @@ class VoiceNoteClient {
               'x-folder-id': folder,
             },
             body: jsonEncode({
-              'model': 'gpt://$folder/$yandexVisionModelName/latest',
+              'model': 'gpt://$folder/$yandexTextModelName/latest',
               'messages': [
                 {'role': 'user', 'content': prompt},
               ],
@@ -202,7 +194,7 @@ class VoiceNoteClient {
           .timeout(_timeout);
       return await _chatText(
         response: response,
-        model: '$yandexVisionModelName · текст',
+        model: '$yandexTextModelName · текст',
         secrets: [key, folder],
         emptyMessage: 'Яндекс вернул пустой ответ.',
         failure: yandexFailureMessage,
@@ -211,7 +203,7 @@ class VoiceNoteClient {
     } on MetadataLookupException {
       rethrow;
     } catch (_) {
-      await _record(model: '$yandexVisionModelName · текст', error: 'нет связи');
+      await _record(model: '$yandexTextModelName · текст', error: 'нет связи');
       throw MetadataLookupException('Не удалось связаться с Яндексом.');
     }
   }

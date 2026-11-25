@@ -8,7 +8,12 @@ import 'package:my_library/core/metadata/shelf_image.dart';
 import 'package:my_library/core/metadata/shelf_reading.dart';
 import 'package:my_library/data/metadata_service.dart';
 
-const yandexVisionModelName = 'gemma-3-27b-it';
+const yandexVisionModelName = 'qwen3.6-35b-a3b';
+
+/// Text notes and catalog questions. This model does not read photos.
+const yandexTextModelName = 'yandexgpt';
+
+const _visionMaxTokens = 4096;
 
 const yandexForbiddenHint =
     'Проверьте роль ai.languageModels.user и область ключа yc.ai.foundationModels.execute в том же каталоге.';
@@ -63,6 +68,8 @@ class YandexShelfReader {
             },
             body: jsonEncode({
               'model': 'gpt://$folder/$yandexVisionModelName/latest',
+              'max_tokens': _visionMaxTokens,
+              'reasoning': {'effort': 'none'},
               'messages': [
                 {
                   'role': 'user',
@@ -135,7 +142,7 @@ class YandexShelfReader {
               'x-folder-id': folder,
             },
             body: jsonEncode({
-              'model': 'gpt://$folder/$yandexVisionModelName/latest',
+              'model': 'gpt://$folder/$yandexTextModelName/latest',
               'messages': [
                 {'role': 'user', 'content': prompt},
               ],
@@ -148,6 +155,7 @@ class YandexShelfReader {
           secrets: [key, folder],
         );
         await _record(
+          model: yandexTextModelName,
           statusCode: response.statusCode,
           error: detail.isEmpty ? 'код ${response.statusCode}' : detail,
         );
@@ -156,15 +164,23 @@ class YandexShelfReader {
         );
       }
       final text = _messageText(jsonDecode(response.body));
-      await _record(statusCode: response.statusCode, bookCount: 0);
+      await _record(
+        model: yandexTextModelName,
+        statusCode: response.statusCode,
+        bookCount: 0,
+      );
       return text;
     } on MetadataLookupException {
       rethrow;
     } on ShelfReadingException catch (error) {
-      await _record(statusCode: 200, error: error.message);
+      await _record(
+        model: yandexTextModelName,
+        statusCode: 200,
+        error: error.message,
+      );
       throw MetadataLookupException(error.message);
     } catch (_) {
-      await _record(error: 'нет связи');
+      await _record(model: yandexTextModelName, error: 'нет связи');
       throw MetadataLookupException('Не удалось связаться с Яндексом.');
     }
   }
@@ -172,6 +188,7 @@ class YandexShelfReader {
   void close() => _client.close();
 
   Future<void> _record({
+    String? model,
     int? statusCode,
     int? shelfCount,
     int? bookCount,
@@ -183,7 +200,7 @@ class YandexShelfReader {
     }
     await sink(
       ModelCallRecord(
-        model: yandexVisionModelName,
+        model: model ?? yandexVisionModelName,
         statusCode: statusCode,
         shelfCount: shelfCount,
         bookCount: bookCount,
